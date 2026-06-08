@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { updateProfile } from "@/lib/api/user";
+import Image from "next/image";
 
 function StepBar({ current }: { current: number }) {
   const steps = [
@@ -97,11 +98,12 @@ export default function TimePage() {
       // Go to the generating screen which calls generateRoadmap()
       router.push("/onboarding/generating");
 
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-        "Something went wrong. Please try again."
-      );
+    } catch (err: unknown) {
+  const e = err as { response?: { data?: { message?: string } } };
+  setError(
+    e?.response?.data?.message ||
+    "Something went wrong. Please try again."
+  );
       setLoading(false);
     }
   }
@@ -112,7 +114,7 @@ export default function TimePage() {
       <div className="bg-white border-b border-border px-8 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="SkillPath AI" className="w-8 h-8 object-contain" />
+            <Image src="/logo.png" alt="SkillPath AI" width={28} height={28} className="object-contain" />
             <span className="font-black text-ink tracking-tight text-[15px]">
               SKILLPATH <span className="text-primary">AI</span>
             </span>

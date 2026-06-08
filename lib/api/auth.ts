@@ -63,27 +63,24 @@ export async function register(payload: RegisterPayload) {
 export async function login(payload: LoginPayload) {
   const response = await api.post<AuthResponse>("/api/auth/login", payload);
 
-  // Save token immediately after a successful login response.
-  // We do it HERE (in the API layer) so every component that calls
-  // login() gets the token saved automatically — no need to repeat
-  // this logic in each component.
-  const token =
-    response.data.token ||
-    (response.data as any)?.data?.token ||
-    (response.data as any)?.accessToken;
+  const data = response.data as unknown as Record<string, unknown>;
+  const inner = data?.data as Record<string, unknown> | undefined;
 
+  const token = inner?.token as string | undefined;
   if (token) {
     localStorage.setItem("skillpath_token", token);
   }
 
-  // Save user name if returned
-  const userName =
-    response.data.user?.name ||
-    (response.data as any)?.data?.user?.name ||
-    (response.data as any)?.data?.name;
+  const user = inner?.user as Record<string, unknown> | undefined;
 
-  if (userName) {
-    localStorage.setItem("skillpath_name", userName);
+  const name = user?.name as string | undefined;
+  if (name) {
+    localStorage.setItem("skillpath_name", name);
+  }
+
+  const preferences = user?.preferences as Record<string, unknown> | undefined;
+  if (preferences) {
+    localStorage.setItem("skillpath_preferences", JSON.stringify(preferences));
   }
 
   return response;

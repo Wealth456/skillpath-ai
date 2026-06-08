@@ -154,7 +154,7 @@ export default function LandingPage() {
           <div className="flex-1">
             <motion.div {...fadeUp(0)} className="inline-flex items-center gap-2 bg-primary-light text-primary text-[13px] font-semibold px-4 py-1.5 rounded-full mb-6">
               <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-              AI-Powered Learning for Africa's Tech Future
+              AI-Powered Learning for Africa Tech Future
             </motion.div>
 
             <motion.h1 {...fadeUp(0.1)} className="text-5xl lg:text-6xl font-black text-ink tracking-tight leading-[1.1] mb-6">
