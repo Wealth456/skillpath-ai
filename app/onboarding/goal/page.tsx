@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Globe, BarChart2, Layers, Code2, Cloud, Smartphone, ChevronRight } from "lucide-react";
+import Image from "next/image";
 
 // ── STEP PROGRESS BAR ────────────────────────────────────────────────────────
 // Reused across all 3 steps. `current` = which step we're on (1, 2, or 3).
@@ -109,7 +110,7 @@ export default function GoalPage() {
       <div className="bg-white border-b border-border px-8 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="SkillPath AI" className="w-8 h-8 object-contain" />
+            <Image src="/logo.png" alt="SkillPath AI" width={28} height={28} className="object-contain" />
             <span className="font-black text-ink tracking-tight text-[15px]">
               SKILLPATH <span className="text-primary">AI</span>
             </span>
