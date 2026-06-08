@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { generateRoadmap } from "@/lib/api/roadmap";
+import Image from "next/image";
 
 const loadingSteps = [
   "Analysing your goals...",
@@ -41,12 +42,13 @@ export default function GeneratingPage() {
         // Small pause so user sees the final step message
         setTimeout(() => router.push("/dashboard"), 800);
 
-      } catch (err: any) {
-        clearInterval(ticker);
-        setError(
-          err?.response?.data?.message ||
-          "Failed to generate your roadmap. Please try again."
-        );
+      } catch (err: unknown) {
+  clearInterval(ticker);
+  const e = err as { response?: { data?: { message?: string } } };
+  setError(
+    e?.response?.data?.message ||
+    "Failed to generate your roadmap. Please try again."
+  );
       }
     }
 
@@ -61,7 +63,7 @@ export default function GeneratingPage() {
 
       {/* Logo */}
       <div className="flex items-center gap-2 mb-12">
-        <img src="/logo.png" alt="SkillPath AI" className="w-8 h-8 object-contain" />
+        <Image src="/logo.png" alt="SkillPath AI" width={28} height={28} className="object-contain" />
         <span className="font-black text-white tracking-tight text-[15px]">
           SKILLPATH <span className="text-primary-light">AI</span>
         </span>

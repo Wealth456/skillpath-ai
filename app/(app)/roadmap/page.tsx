@@ -25,8 +25,9 @@ interface Roadmap {
 
 export default function RoadmapPage() {
   const [roadmap, setRoadmap]     = useState<Roadmap | null>(null);
-  const [userLevel, setUserLevel] = useState("Beginner");
-  const [dailyTime, setDailyTime] = useState("30-60 min/day");
+  // Replace with:
+const [userLevel, setUserLevel] = useState("Beginner");
+const [dailyTime] = useState("30-60 min/day");
   const router = useRouter();
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function RoadmapPage() {
     }
 
     // Read user info
-    const name  = localStorage.getItem("skillpath_name") || "";
+  
     const level = localStorage.getItem("sp_level") || "beginner";
     
     setUserLevel(

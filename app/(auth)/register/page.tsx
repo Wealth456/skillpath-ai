@@ -41,8 +41,9 @@ export default function RegisterPage() {
         password,
       });
       router.push("/login?registered=true");
-    } catch (err: any) {
-      setError(err?.response?.data?.message || "Something went wrong. Please try again.");
+    } catch (err: unknown) {
+  const e = err as { response?: { data?: { message?: string } } };
+  setError(e?.response?.data?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
