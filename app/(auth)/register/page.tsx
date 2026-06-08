@@ -43,7 +43,7 @@ export default function RegisterPage() {
       router.push("/login?registered=true");
     } catch (err: unknown) {
   const e = err as { response?: { data?: { message?: string } } };
-  setError(e?.response?.data?.message || "Something went wrong. Please try again.");
+  
     } finally {
       setLoading(false);
     }

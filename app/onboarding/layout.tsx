@@ -4,7 +4,7 @@
 // Every onboarding page is passed in as {children}.
 
 import Link from "next/link";
-import { Check } from "lucide-react";
+
 
 // We receive the current step as a search param — but since layout.tsx
 // is a server component and can't read search params easily, we'll
