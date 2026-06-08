@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, CheckCircle2, ChevronRight, Settings } from "lucide-react";
+import { Lock, ChevronRight, Settings } from "lucide-react";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 interface RoadmapTopic {
@@ -25,7 +25,6 @@ interface Roadmap {
 
 export default function RoadmapPage() {
   const [roadmap, setRoadmap]     = useState<Roadmap | null>(null);
-  const [userName, setUserName]   = useState("");
   const [userLevel, setUserLevel] = useState("Beginner");
   const [dailyTime, setDailyTime] = useState("30-60 min/day");
   const router = useRouter();
@@ -45,7 +44,7 @@ export default function RoadmapPage() {
     // Read user info
     const name  = localStorage.getItem("skillpath_name") || "";
     const level = localStorage.getItem("sp_level") || "beginner";
-    setUserName(name);
+    
     setUserLevel(
       level === "beginner" ? "Beginner" :
       level === "intermediate" ? "Intermediate" : "Advanced"

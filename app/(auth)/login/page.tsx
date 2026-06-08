@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, CheckCircle2, Info } from "lucide-react";
 import { login } from "@/lib/api/auth";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail]               = useState("");
@@ -23,39 +24,42 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setLoading(true);
+  setError("");
 
-    try {
-      const res = await login({ email: email.trim(), password });
+  try {
+    const res = await login({ email: email.trim(), password });
 
-      const token = localStorage.getItem("skillpath_token");
-      if (!token) {
-        setError("No token received. Try again.");
-        setLoading(false);
-        return;
-      }
-
-      const d = (res.data as any)?.data;
-      const preferences = d?.user?.preferences;
-
-      if (!preferences?.goal || preferences.goal === "") {
-        router.push("/onboarding/goal");
-      } else {
-        router.push("/dashboard");
-      }
-
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-        "Invalid email or password. Please try again."
-      );
-    } finally {
+    const token = localStorage.getItem("skillpath_token");
+    if (!token) {
+      setError("No token received. Try again.");
       setLoading(false);
+      return;
     }
+
+    const d = (res.data as unknown as Record<string, unknown>)?.data as Record<string, unknown>;
+    
+    const user = d?.user as Record<string, unknown> | undefined;
+    const preferences = user?.preferences as Record<string, unknown> | undefined;
+
+    if (!preferences?.goal || preferences.goal === "") {
+      router.push("/onboarding/goal");
+    } else {
+      router.push("/dashboard");
+    }
+
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { message?: string } } };
+    setError(
+      e?.response?.data?.message ||
+      "Invalid email or password. Please try again."
+    );
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="min-h-screen flex">
@@ -131,7 +135,7 @@ export default function LoginPage() {
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2 p-6">
           <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center">
-            <img src="/logo.png" alt="SkillPath AI" className="w-6 h-6 object-contain" />
+            <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-black text-ink tracking-tight text-[13px]">SKILLPATH</span>

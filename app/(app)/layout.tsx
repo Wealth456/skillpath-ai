@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Map,
@@ -54,7 +55,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
 <div className="bg-sidebar-header px-5 py-4 flex items-center gap-2">
   <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-    <img src="/logo.png" alt="SkillPath AI" className="w-6 h-6 object-contain" />
+    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
   </div>
   <span className="font-black text-white tracking-tight text-[14px] whitespace-nowrap">
     SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI

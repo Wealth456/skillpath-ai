@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Lock, User, Mail, CheckCircle2, Info } from "lucide-react";
+import { Eye, EyeOff, Lock, User, Mail,  Info } from "lucide-react";
 import { register } from "@/lib/api/auth";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const [firstName, setFirstName] = useState("");
@@ -131,7 +132,7 @@ export default function RegisterPage() {
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2 p-6">
           <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center">
-            <img src="/logo.png" alt="SkillPath AI" className="w-6 h-6 object-contain" />
+            <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-black text-ink tracking-tight text-[13px]">SKILLPATH</span>
