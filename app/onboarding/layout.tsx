@@ -4,6 +4,7 @@
 // Every onboarding page is passed in as {children}.
 
 import Link from "next/link";
+import Image from "next/image";
 
 
 // We receive the current step as a search param — but since layout.tsx
@@ -21,13 +22,13 @@ export default function OnboardingLayout({
       {/* TOP BAR */}
       <div className="bg-white border-b border-border h-16 flex items-center px-8">
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-white font-black text-sm leading-none">S°</span>
-          </div>
-          <span className="font-black text-ink tracking-tight text-[15px]">
-            SKILLPATH <span className="text-primary">AI</span>
-          </span>
-        </Link>
+  <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
+  </div>
+  <span className="font-black text-ink tracking-tight text-[15px] whitespace-nowrap">
+    SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
+  </span>
+</Link>
       </div>
 
       {/* PAGE CONTENT */}

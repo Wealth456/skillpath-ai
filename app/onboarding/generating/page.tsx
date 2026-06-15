@@ -115,16 +115,22 @@ export default function GeneratingPage() {
 
       {/* Error state */}
       {error && (
-        <div className="mt-6 bg-error-light border border-error text-error text-[13px] rounded-xl px-5 py-3 max-w-md w-full text-center">
-          {error}
-          <button
-            onClick={() => window.location.reload()}
-            className="block mt-2 text-primary font-semibold underline mx-auto"
-          >
-            Try again
-          </button>
-        </div>
-      )}
+  <div className="mt-6 bg-white/10 border border-white/20 rounded-2xl px-6 py-5 max-w-md w-full text-center">
+    <p className="text-2xl mb-2">⚠️</p>
+    <p className="text-[15px] font-bold text-white mb-1">
+      Roadmap generation unavailable
+    </p>
+    <p className="text-[13px] text-white/60 mb-4 leading-relaxed">
+      Our AI service is temporarily at capacity. This usually resolves within a few minutes. Please try again shortly.
+    </p>
+    <button
+      onClick={() => window.location.reload()}
+      className="bg-primary hover:bg-primary-dark text-white text-[13px] font-bold px-6 py-2.5 rounded-full transition-all"
+    >
+      Try again
+    </button>
+  </div>
+)}
     </div>
   );
 }

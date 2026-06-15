@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Map, BookOpen, FileText, Brain, BarChart2, ChevronRight, Sparkles, Menu, X } from "lucide-react";
+import Image from "next/image";
+
 
 function fadeUp(delay: number) {
   return {
@@ -37,13 +39,13 @@ function Navbar() {
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
 
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-white font-black text-sm">S°</span>
-          </div>
-          <span className="font-black text-ink tracking-tight text-[15px]">
-            SKILLPATH <span className="text-primary">AI</span>
-          </span>
-        </Link>
+  <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
+  </div>
+  <span className="font-black text-ink tracking-tight text-[15px] whitespace-nowrap">
+    SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
+  </span>
+</Link>
 
         <div className="hidden md:flex items-center gap-8">
           <a href="#how-it-works" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">How it works</a>
@@ -296,14 +298,12 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col lg:flex-row justify-between gap-10 mb-10">
             <div className="max-w-xs">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-white font-black text-sm">S°</span>
-                </div>
-                <span className="font-black text-white tracking-tight text-[15px]">
-                  SKILLPATH <span className="text-gold">AI</span>
-                </span>
-              </div>
+              <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
+  </div>
+  <span className="font-white text-white tracking-tight text-[15px] whitespace-nowrap">
+    SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
+  </span>
               <p className="text-[13px] text-ink-faint leading-relaxed">AI-powered tech learning built for African learners</p>
             </div>
 
