@@ -111,9 +111,9 @@ export default function GoalPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/logo.png" alt="SkillPath AI" width={28} height={28} className="object-contain" />
-            <span className="font-black text-ink tracking-tight text-[15px]">
+            {/* <span className="font-black text-ink tracking-tight text-[15px]">
               SKILLPATH <span className="text-primary">AI</span>
-            </span>
+            </span> */}
           </div>
           <StepBar current={1} />
           <div className="w-24" />{/* Spacer to center the step bar */}
@@ -225,14 +225,14 @@ export default function GoalPage() {
           )}
 
           {/* DIVIDER */}
-          <div className="flex items-center gap-3 my-4">
+          {/* <div className="flex items-center gap-3 my-4">
             <div className="flex-1 h-px bg-grey-200" />
             <span className="text-[12px] text-ink-faint">or</span>
             <div className="flex-1 h-px bg-grey-200" />
-          </div>
+          </div> */}
 
           {/* SECONDARY TEXT AREA — always visible below tracks too */}
-          {tab === "track" && (
+          {/* {tab === "track" && (
             <div>
               <p className="text-[13px] font-bold text-ink mb-1">Describe your own goal</p>
               <p className="text-[12px] text-ink-muted mb-3">
@@ -253,7 +253,7 @@ export default function GoalPage() {
                 </p>
               </div>
             </div>
-          )}
+          )} */}
         </div>
 
         {/* BOTTOM BAR */}

@@ -3,9 +3,8 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Map, BookOpen, FileText, Brain, BarChart2, ChevronRight, Sparkles, Menu, X } from "lucide-react";
+import { Map, BookOpen, FileText, Brain, BarChart2, Award, ChevronRight, Menu, X } from "lucide-react";
 import Image from "next/image";
-
 
 function fadeUp(delay: number) {
   return {
@@ -39,13 +38,13 @@ function Navbar() {
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
 
         <Link href="/" className="flex items-center gap-2">
-  <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
-  </div>
-  <span className="font-black text-ink tracking-tight text-[15px] whitespace-nowrap">
-    SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
-  </span>
-</Link>
+          <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
+          </div>
+          <span className="font-black text-ink tracking-tight text-[15px] whitespace-nowrap">
+            SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
+          </span>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
           <a href="#how-it-works" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">How it works</a>
@@ -80,85 +79,14 @@ function Navbar() {
   );
 }
 
-function HeroCard() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 40, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-      className="w-full max-w-sm bg-white rounded-2xl shadow-card-hover border border-border p-5 animate-float"
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-2 h-2 rounded-full bg-primary" />
-        <span className="text-[13px] text-ink-muted font-medium">Roadmap ready! AI built your path</span>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">AO</div>
-          <div>
-            <p className="text-[14px] font-bold text-ink">Welcome back, Amaka 👋</p>
-            <p className="text-[13px] text-ink-muted">Continue your journey</p>
-          </div>
-        </div>
-        <div className="bg-primary-light text-primary text-[12px] font-semibold px-2 py-1 rounded-full">7 day streak</div>
-      </div>
-
-      <div className="mb-3">
-        <div className="flex justify-between mb-1">
-          <span className="text-[13px] font-semibold text-ink">Python for Beginners</span>
-          <span className="text-[13px] text-ink-muted">68%</span>
-        </div>
-        <div className="h-1.5 bg-grey-200 rounded-full">
-          <div className="h-1.5 bg-primary rounded-full" style={{ width: "68%" }} />
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <div className="flex justify-between mb-1">
-          <span className="text-[13px] font-semibold text-ink">JavaScript Essentials</span>
-          <span className="text-[13px] text-ink-muted">12%</span>
-        </div>
-        <div className="h-1.5 bg-grey-200 rounded-full">
-          <div className="h-1.5 bg-primary rounded-full" style={{ width: "12%" }} />
-        </div>
-      </div>
-
-      <div className="bg-grey-100 rounded-xl p-3 mb-3">
-        <p className="text-[13px] font-semibold text-ink">Python Fundamentals</p>
-        <p className="text-[13px] text-ink-muted">Module 4 of 8 · 12 lessons left</p>
-      </div>
-
-      <div className="bg-primary rounded-xl p-3 mb-3">
-        <div className="flex items-start gap-2">
-          <Sparkles size={14} className="text-white mt-0.5 flex-shrink-0" />
-          <p className="text-[13px] text-white">
-            <span className="font-bold">AI Tip:</span> Based on your pace, you will finish Python by Friday!
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-grey-100 rounded-xl p-3 text-right">
-        <p className="text-[13px] font-semibold text-ink">PDF Summarised</p>
-        <p className="text-[13px] text-ink-muted">AI extracted key notes</p>
-      </div>
-    </motion.div>
-  );
-}
-
 export default function LandingPage() {
   return (
     <div className="bg-white min-h-screen">
       <Navbar />
 
-      <section className="pt-32 pb-20 px-6 max-w-6xl mx-auto">
+      <section className="pt-32 pb-10 px-6 max-w-6xl mx-auto">
         <div className="flex flex-col lg:flex-row items-center gap-16">
           <div className="flex-1">
-            <motion.div {...fadeUp(0)} className="inline-flex items-center gap-2 bg-primary-light text-primary text-[13px] font-semibold px-4 py-1.5 rounded-full mb-6">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-              AI-Powered Learning for Africa Tech Future
-            </motion.div>
-
             <motion.h1 {...fadeUp(0.1)} className="text-5xl lg:text-6xl font-black text-ink tracking-tight leading-[1.1] mb-6">
               Your personal{" "}
               <span className="text-gold">AI roadmap</span>{" "}
@@ -175,30 +103,26 @@ export default function LandingPage() {
                 Start Learning
               </Link>
             </motion.div>
-
-            <motion.div {...fadeUp(0.4)} className="flex items-center gap-10 mt-14">
-              <div>
-                <p className="text-2xl font-black text-ink">12,000+</p>
-                <p className="text-[13px] text-ink-muted mt-0.5">Active learners</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black text-ink">95%</p>
-                <p className="text-[13px] text-ink-muted mt-0.5">Completion rate</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black text-ink">200+</p>
-                <p className="text-[13px] text-ink-muted mt-0.5">Courses available</p>
-              </div>
-            </motion.div>
           </div>
 
-          <div className="flex-1 flex justify-center lg:justify-end">
-            <HeroCard />
-          </div>
+          <motion.div
+  initial={{ opacity: 0, y: 30, scale: 0.96 }}
+  animate={{ opacity: 1, y: 0, scale: 1 }}
+  transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+  className="flex-1 flex justify-center lg:justify-end"
+>
+  <Image
+    src="/hero-illustration.jpg"
+    alt="Student learning online"
+    width={700}
+    height={700}
+    className="w-full max-w-xl lg:max-w-2xl object-contain"
+  />
+</motion.div>
         </div>
       </section>
 
-      <section id="how-it-works" className="py-20 px-6 bg-surface">
+      <section id="how-it-works" className="py-16 px-6 bg-surface">
         <div className="max-w-6xl mx-auto">
           <motion.p {...fadeView(0)} className="text-[12px] font-bold tracking-widest uppercase text-primary mb-3">HOW IT WORKS</motion.p>
           <motion.h2 {...fadeView(0.1)} className="text-4xl font-black text-ink tracking-tight mb-3">Get started in 3 simple steps</motion.h2>
@@ -272,6 +196,14 @@ export default function LandingPage() {
               <h3 className="text-[20px] font-bold text-ink mb-2">Progress Tracking</h3>
               <p className="text-[14px] text-ink-muted leading-relaxed">Visualise your growth with an intuitive dashboard — see streaks, completion rates, and exactly what is coming next.</p>
             </motion.div>
+
+            <motion.div {...fadeView(0.5)} className="bg-white rounded-2xl p-6 border border-border shadow-card-default hover:shadow-card-hover transition-all group">
+              <div className="w-11 h-11 rounded-xl bg-primary-light flex items-center justify-center mb-4 group-hover:bg-primary transition-colors">
+                <Award size={20} className="text-primary group-hover:text-white transition-colors" />
+              </div>
+              <h3 className="text-[20px] font-bold text-ink mb-2">Verified Certificates</h3>
+              <p className="text-[14px] text-ink-muted leading-relaxed">Earn shareable certificates as you complete courses — proof of skill you can add to your CV or LinkedIn.</p>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -298,12 +230,14 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col lg:flex-row justify-between gap-10 mb-10">
             <div className="max-w-xs">
-              <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-    <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
-  </div>
-  <span className="font-white text-white tracking-tight text-[15px] whitespace-nowrap">
-    SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
-  </span>
+              <div className="flex items-center gap-2 mb-3">
+                <div style={{ backgroundColor: "#F5A623" }} className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Image src="/logo.png" alt="SkillPath AI" width={24} height={24} className="object-contain" />
+                </div>
+                <span className="font-black text-white tracking-tight text-[15px] whitespace-nowrap">
+                  SKILL<span style={{ color: "#F5A623" }}>PATH</span> AI
+                </span>
+              </div>
               <p className="text-[13px] text-ink-faint leading-relaxed">AI-powered tech learning built for African learners</p>
             </div>
 

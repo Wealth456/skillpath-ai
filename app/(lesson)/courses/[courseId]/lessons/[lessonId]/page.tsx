@@ -10,6 +10,7 @@ import {
   BookOpen,
   Link as LinkIcon,
   Plus,
+  ClipboardList,
 } from "lucide-react";
 import { getCourse, markLessonComplete } from "@/lib/api/learning";
 import type { Course, CourseModule, Lesson } from "@/lib/api/learning";
@@ -235,6 +236,8 @@ export default function LessonPage() {
   const [notes, setNotes]                           = useState<string[]>([]);
   const [noteInput, setNoteInput]                   = useState("");
   const [addingNote, setAddingNote]                 = useState(false);
+  // New state — controls the "Take Quiz" prompt modal shown after marking complete
+  const [showQuizPrompt, setShowQuizPrompt]         = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -295,6 +298,7 @@ export default function LessonPage() {
     load();
   }, [courseId, lessonId]);
 
+  // ── Mark lesson complete, then show the quiz prompt instead of auto-navigating ──
   async function handleMarkComplete() {
     if (!currentLesson || marking) return;
     try {
@@ -303,13 +307,27 @@ export default function LessonPage() {
       const updated = [...completedLessonIds, lessonId];
       setCompletedLessonIds(updated);
       localStorage.setItem(`skillpath_completed_${courseId}`, JSON.stringify(updated));
-      navigateLesson("next");
+
+      // Show the "Take Quiz" modal instead of jumping straight to next lesson
+      setShowQuizPrompt(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to mark complete";
       setError(message);
     } finally {
       setMarking(false);
     }
+  }
+
+  // ── Navigate to this lesson's quiz ──
+  function handleTakeQuiz() {
+    setShowQuizPrompt(false);
+    router.push(`/courses/${courseId}/quiz/${lessonId}`);
+  }
+
+  // ── Skip the quiz and go straight to the next lesson ──
+  function handleSkipQuiz() {
+    setShowQuizPrompt(false);
+    navigateLesson("next");
   }
 
   function navigateLesson(direction: "prev" | "next") {
@@ -388,35 +406,35 @@ export default function LessonPage() {
   const noteItems: React.ReactElement[] = notes.map(
     (note: string, i: number): React.ReactElement => (
       <p
-      key={i}
-      className="text-[13px] text-[#3D4A6B] py-2 border-b border-[#E4E8F5] last:border-0"
+        key={i}
+        className="text-[13px] text-[#3D4A6B] py-2 border-b border-[#E4E8F5] last:border-0"
       >
         {note}
       </p>
     )
-    );
-  
+  );
 
   // ── Build resource links (Rule 10 — outside JSX) ──
   // Typed as ResourceLink[] to fix the shorthand inference error
   const resources: ResourceLink[] = [
-  { label: cap(course.category) + " Docs",           href: "#" },
-  { label: cap(course.category) + " Cheatsheet PDF", href: "#" },
-  { label: "Practice Exercises",                      href: "#" },
-];
+    { label: cap(course.category) + " Docs",           href: "#" },
+    { label: cap(course.category) + " Cheatsheet PDF", href: "#" },
+    { label: "Practice Exercises",                      href: "#" },
+  ];
 
   const resourceItems: React.ReactElement[] = resources.map(
-  (res: ResourceLink, i: number): React.ReactElement => (
-    <button
-      key={i}
-      onClick={() => window.open(res.href, "_blank")}
-      className="flex items-center gap-2 text-[13px] text-[#1A3ADB] font-medium hover:underline py-1.5 w-full text-left"
-    >
-      <LinkIcon size={13} />
-      {res.label}
-    </button>
-  )
-);
+    (res: ResourceLink, i: number): React.ReactElement => (
+      <button
+        key={i}
+        onClick={() => window.open(res.href, "_blank")}
+        className="flex items-center gap-2 text-[13px] text-[#1A3ADB] font-medium hover:underline py-1.5 w-full text-left"
+      >
+        <LinkIcon size={13} />
+        {res.label}
+      </button>
+    )
+  );
+
   // ─────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────
@@ -603,6 +621,39 @@ export default function LessonPage() {
           </button>
         )}
       </div>
+
+      {/* ── QUIZ PROMPT MODAL ── */}
+      {/* Shown right after marking the lesson complete. Lets the user
+          choose to take the AI-generated quiz now or skip to the next lesson. */}
+      {showQuizPrompt && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-6">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#E8EDFF] flex items-center justify-center">
+              <ClipboardList size={26} color="#1A3ADB" />
+            </div>
+            <h3 className="text-[18px] font-black text-[#0D1220]">
+              Lesson complete! 🎉
+            </h3>
+            <p className="text-[13px] text-[#3D4A6B] leading-relaxed">
+              Ready to test what you&apos;ve learned? Take a quick 5-question quiz on this lesson.
+            </p>
+            <div className="flex flex-col gap-2 w-full mt-2">
+              <button
+                onClick={handleTakeQuiz}
+                className="w-full py-3 rounded-xl bg-[#1A3ADB] text-white text-[14px] font-bold hover:bg-[#1228B0] transition-colors"
+              >
+                Take Quiz
+              </button>
+              <button
+                onClick={handleSkipQuiz}
+                className="w-full py-3 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[14px] font-semibold hover:bg-[#F7F8FC] transition-colors"
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

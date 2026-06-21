@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { generateRoadmap } from "@/lib/api/roadmap";
-import Image from "next/image";
+// import Image from "next/image";
+import { Bot } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 const loadingSteps = [
   "Analysing your goals...",
@@ -62,23 +64,23 @@ export default function GeneratingPage() {
     <div className="min-h-screen bg-sidebar flex flex-col items-center justify-center px-6">
 
       {/* Logo */}
-      <div className="flex items-center gap-2 mb-12">
+      {/* <div className="flex items-center gap-2 mb-12">
         <Image src="/logo.png" alt="SkillPath AI" width={28} height={28} className="object-contain" />
         <span className="font-black text-white tracking-tight text-[15px]">
           SKILLPATH <span className="text-primary-light">AI</span>
         </span>
-      </div>
+      </div> */}
 
       {/* Card */}
       <div className="bg-white/10 border border-white/20 rounded-3xl p-10 max-w-md w-full text-center">
 
         {/* Pulse ring */}
         <div className="relative w-20 h-20 mx-auto mb-8">
-          <div className="absolute inset-0 rounded-full bg-primary opacity-20 animate-ping" />
-          <div className="relative w-20 h-20 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-3xl">🤖</span>
-          </div>
-        </div>
+  <div className="absolute inset-0 rounded-full bg-primary opacity-20 animate-ping" />
+  <div className="relative w-20 h-20 rounded-full bg-primary flex items-center justify-center">
+    <Bot size={32} className="text-white" />
+  </div>
+</div>
 
         <h2 className="text-[24px] font-black text-white mb-2">
           Building your roadmap
@@ -116,7 +118,7 @@ export default function GeneratingPage() {
       {/* Error state */}
       {error && (
   <div className="mt-6 bg-white/10 border border-white/20 rounded-2xl px-6 py-5 max-w-md w-full text-center">
-    <p className="text-2xl mb-2">⚠️</p>
+    <AlertTriangle size={24} className="text-error mx-auto mb-2" />
     <p className="text-[15px] font-bold text-white mb-1">
       Roadmap generation unavailable
     </p>

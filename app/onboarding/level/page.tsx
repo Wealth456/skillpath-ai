@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, Sprout, BookOpen, Zap } from "lucide-react";
 import Image from "next/image";
+import { Bot } from "lucide-react";
 
 function StepBar({ current }: { current: number }) {
   const steps = [
@@ -147,8 +148,8 @@ export default function LevelPage() {
           {selectedLevel && (
             <div className="bg-primary-light border border-primary rounded-xl p-4 flex items-start gap-3">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-[14px]">🤖</span>
-              </div>
+    <Bot size={16} className="text-white" />
+  </div>
               <div>
                 <p className="text-[13px] font-bold text-ink mb-0.5">
                   {selectedLevel.label} path selected

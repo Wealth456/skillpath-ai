@@ -69,7 +69,8 @@ function StatCard({
   sub: string;
 }) {
   return (
-    <div className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default">
+    // <div className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default">
+      <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[12px] font-semibold text-ink-muted">{label}</span>
         <div className="w-8 h-8 rounded-lg bg-primary-light flex items-center justify-center">
@@ -227,7 +228,7 @@ export default function DashboardPage() {
     courses.slice(0, 2).map((course) => (
       <div
         key={course._id}
-        className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
+        className="flex-1 min-w-0. bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
       >
         <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
           {course.category}
@@ -257,7 +258,7 @@ export default function DashboardPage() {
       </div>
     ))
   ) : (
-    <div className="flex-1 bg-white rounded-2xl border border-border p-6 text-center">
+    <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-6 text-center">
       <BookOpen size={32} className="text-ink-faint mx-auto mb-3" />
       <p className="text-[14px] text-ink-muted mb-3">No courses yet</p>
       <Link href="/courses" className="text-primary text-[13px] font-semibold underline">
@@ -350,7 +351,7 @@ export default function DashboardPage() {
           <div className="flex gap-4">
 
             {/* Recent Achievements */}
-            <div className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default">
+            <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
   <h3 className="text-[15px] font-bold text-ink mb-4">Recent Achievements</h3>
   <div className="flex flex-col items-center justify-center py-6 text-center">
     <Trophy size={28} className="text-ink-faint mb-2" />
@@ -361,7 +362,7 @@ export default function DashboardPage() {
 </div>
 
             {/* Recommended Courses */}
-            <div className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default">
+            <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
               <h3 className="text-[15px] font-bold text-ink mb-4">Recommended for You</h3>
               <div className="flex flex-col gap-3">
                 {courses.map((course) => (

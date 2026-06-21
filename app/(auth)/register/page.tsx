@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Lock, User, Mail, Info } from "lucide-react";
+import { Eye, EyeOff, Lock, User, Mail, } from "lucide-react";
 import { register } from "@/lib/api/auth";
 import Image from "next/image";
 
@@ -169,12 +169,12 @@ export default function RegisterPage() {
           </div>
 
           {/* Info banner */}
-          <div className="bg-sidebar rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
+          {/* <div className="bg-sidebar rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
             <Info size={15} className="text-primary-light mt-0.5 flex-shrink-0" />
             <p className="text-[12px] text-white/80 leading-relaxed">
               By creating an account, you will receive learning tips, and you can unsubscribe at any time.
             </p>
-          </div>
+          </div> */}
 
           {/* Submit */}
           <button
