@@ -2,19 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, XCircle, ChevronRight, RotateCcw } from "lucide-react";
-import type { QuizResult } from "@/lib/api/quiz";
+import { CheckCircle2, XCircle, ChevronRight, RotateCcw, History } from "lucide-react";
+import { getQuizAttempts } from "@/lib/api/quiz";
+import type { QuizResult, QuizAttempt } from "@/lib/api/quiz";
+import { getCourse } from "@/lib/api/learning";
+import type { Course, Lesson } from "@/lib/api/learning";
 
 export default function QuizResultsPage() {
   const params       = useParams();
-  const router        = useRouter();
-  const searchParams  = useSearchParams();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
   const courseId = typeof params.courseId === "string" ? params.courseId : "";
   const lessonId = typeof params.lessonId === "string" ? params.lessonId : "";
   const quizId   = searchParams.get("quizId") ?? "";
 
-  const [result, setResult] = useState<QuizResult | null>(null);
+  const [result, setResult]             = useState<QuizResult | null>(null);
+  const [nextLessonId, setNextLessonId] = useState<string | null>(null);
+  const [attempts, setAttempts]         = useState<QuizAttempt[]>([]);
+  const [showAttempts, setShowAttempts] = useState(false);
+  const [loadingAttempts, setLoadingAttempts] = useState(false);
 
   // ── Read result from sessionStorage (set by the quiz page on submit) ──
   useEffect(() => {
@@ -24,6 +31,62 @@ export default function QuizResultsPage() {
       setResult(JSON.parse(stored));
     }
   }, [quizId]);
+
+  // ── Find the next lesson's ID so "Continue" goes to the right place ──
+  useEffect(() => {
+    if (!courseId || !lessonId) return;
+
+    async function findNextLesson() {
+      try {
+        const response = await getCourse(courseId);
+        const course: Course = response.data.data.course;
+
+        // Flatten all lessons across all modules, in order
+        const allLessons: Lesson[] = [];
+        course.modules.forEach((mod) => mod.lessons.forEach((l) => allLessons.push(l)));
+
+        const currentIndex = allLessons.findIndex((l) => l._id === lessonId);
+        const next = currentIndex >= 0 && currentIndex < allLessons.length - 1
+          ? allLessons[currentIndex + 1]
+          : null;
+
+        setNextLessonId(next ? next._id : null);
+      } catch {
+        // If this fails, "Continue" will safely fall back to the course page
+        setNextLessonId(null);
+      }
+    }
+
+    findNextLesson();
+  }, [courseId, lessonId]);
+
+  // ── Load past attempts for this quiz (lazy — only when user opens the panel) ──
+  async function handleToggleAttempts() {
+    const opening = !showAttempts;
+    setShowAttempts(opening);
+
+    // Only fetch the first time the panel is opened
+    if (opening && attempts.length === 0 && quizId) {
+      try {
+        setLoadingAttempts(true);
+        const response = await getQuizAttempts(quizId);
+        setAttempts(response.data.data.attempts);
+      } catch {
+        setAttempts([]);
+      } finally {
+        setLoadingAttempts(false);
+      }
+    }
+  }
+
+  // ── Continue button — goes to the real next lesson, or back to course if none ──
+  function handleContinue() {
+    if (nextLessonId) {
+      router.push(`/courses/${courseId}/lessons/${nextLessonId}`);
+    } else {
+      router.push(`/courses/${courseId}`);
+    }
+  }
 
   if (!result) {
     return (
@@ -71,6 +134,54 @@ export default function QuizResultsPage() {
       </div>
     </div>
   ));
+
+  // Build past attempt rows — Rule 10
+  const attemptRows = attempts.map((attempt) => {
+    const date = new Date(attempt.createdAt);
+    const dateDisplay = date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const timeDisplay = date.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const mins = Math.floor(attempt.timeTaken / 60);
+    const secs = attempt.timeTaken % 60;
+
+    return (
+      <div
+        key={attempt._id}
+        className="flex items-center justify-between py-3 border-b border-[#E4E8F5] last:border-0"
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+              attempt.passed ? "bg-[#E8EDFF]" : "bg-[#FEE2E2]"
+            }`}
+          >
+            {attempt.passed ? (
+              <CheckCircle2 size={14} color="#1A3ADB" />
+            ) : (
+              <XCircle size={14} color="#EF4444" />
+            )}
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#0D1220]">
+              {attempt.score}% · {attempt.passed ? "Passed" : "Failed"}
+            </p>
+            <p className="text-[11px] text-[#8A97B8]">
+              {dateDisplay} at {timeDisplay}
+            </p>
+          </div>
+        </div>
+        <span className="text-[12px] text-[#8A97B8] flex-shrink-0">
+          {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+        </span>
+      </div>
+    );
+  });
 
   const minutes = Math.floor(result.timeTaken / 60);
   const seconds = result.timeTaken % 60;
@@ -153,10 +264,11 @@ export default function QuizResultsPage() {
           <div className="flex items-center gap-3 flex-wrap">
             {result.passed ? (
               <button
-                onClick={() => router.push(`/courses/${courseId}`)}
+                onClick={handleContinue}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1A3ADB] text-white text-[13px] font-bold hover:bg-[#1228B0] transition-colors"
               >
-                Continue to next lesson <ChevronRight size={14} />
+                {nextLessonId ? "Continue to next lesson" : "Back to course"}
+                <ChevronRight size={14} />
               </button>
             ) : (
               <button
@@ -166,7 +278,33 @@ export default function QuizResultsPage() {
                 <RotateCcw size={13} /> Retake quiz
               </button>
             )}
+
+            {/* Past attempts toggle */}
+            <button
+              onClick={handleToggleAttempts}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[13px] font-semibold hover:bg-[#F7F8FC] transition-colors"
+            >
+              <History size={13} />
+              {showAttempts ? "Hide past attempts" : "View past attempts"}
+            </button>
           </div>
+
+          {/* Past attempts panel — only renders when toggled open */}
+          {showAttempts && (
+            <div className="rounded-xl border border-[#E4E8F5] px-4 py-2 mt-1">
+              {loadingAttempts ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="w-5 h-5 rounded-full border-2 border-[#1A3ADB] border-t-transparent animate-spin" />
+                </div>
+              ) : attempts.length > 0 ? (
+                <div className="flex flex-col">{attemptRows}</div>
+              ) : (
+                <p className="text-[12px] text-[#8A97B8] text-center py-4">
+                  No past attempts found for this quiz.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Review section */}
