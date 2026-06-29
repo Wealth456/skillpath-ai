@@ -69,8 +69,7 @@ function StatCard({
   sub: string;
 }) {
   return (
-    // <div className="flex-1 bg-white rounded-2xl border border-border p-5 shadow-card-default">
-      <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
+    <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[12px] font-semibold text-ink-muted">{label}</span>
         <div className="w-8 h-8 rounded-lg bg-primary-light flex items-center justify-center">
@@ -190,31 +189,31 @@ export default function DashboardPage() {
 
       {/* ── STAT CARDS ── */}
       <div className="flex gap-4 mb-6">
-  <StatCard
-    icon={<BookOpen size={15} className="text-primary" />}
-    label="Active Courses"
-    value={courses.length}
-    sub={courses.length > 0 ? `${courses.length} enrolled` : "Browse courses"}
-  />
-  <StatCard
-    icon={<CheckCircle2 size={15} className="text-primary" />}
-    label="Lessons Done"
-    value={0}
-    sub="Start learning!"
-  />
-  <StatCard
-    icon={<Flame size={15} className="text-primary" />}
-    label="Day Streak"
-    value="0 🔥"
-    sub="Start your streak today"
-  />
-  <StatCard
-    icon={<Map size={15} className="text-primary" />}
-    label="Roadmap Progress"
-    value={roadmap ? `${roadmap.stages.length} stages` : "—"}
-    sub={roadmap ? `${roadmap.estimatedWeeks} weeks total` : "Not generated yet"}
-  />
-</div>
+        <StatCard
+          icon={<BookOpen size={15} className="text-primary" />}
+          label="Available Courses"
+          value={courses.length}
+          sub={courses.length > 0 ? "Pick one to start" : "Browse courses"}
+        />
+        <StatCard
+          icon={<CheckCircle2 size={15} className="text-primary" />}
+          label="Lessons Done"
+          value={0}
+          sub="Start learning!"
+        />
+        <StatCard
+          icon={<Flame size={15} className="text-primary" />}
+          label="Day Streak"
+          value="0 🔥"
+          sub="Start your streak today"
+        />
+        <StatCard
+          icon={<Map size={15} className="text-primary" />}
+          label="Roadmap Progress"
+          value={roadmap ? `${roadmap.stages.length} stages` : "—"}
+          sub={roadmap ? `${roadmap.estimatedWeeks} weeks total` : "Not generated yet"}
+        />
+      </div>
 
       {/* ── MAIN GRID ── */}
       <div className="flex gap-6">
@@ -224,49 +223,49 @@ export default function DashboardPage() {
 
           {/* Continue Learning */}
           <div className="flex gap-4">
-  {courses.length > 0 ? (
-    courses.slice(0, 2).map((course) => (
-      <div
-        key={course._id}
-        className="flex-1 min-w-0. bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
-      >
-        <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
-          {course.category}
-        </div>
-        <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
-        <p className="text-[12px] text-ink-muted mb-3">
-          By {course.instructor} · {course.totalLessons} lessons
-        </p>
-        <div className="mb-1">
-          <div className="flex justify-between mb-1">
-            <span className="text-[12px] text-ink-muted">Progress</span>
-            <span className="text-[12px] font-semibold text-primary">0%</span>
+            {courses.length > 0 ? (
+              courses.slice(0, 2).map((course) => (
+                <div
+                  key={course._id}
+                  className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
+                >
+                  <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
+                    {course.category}
+                  </div>
+                  <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
+                  <p className="text-[12px] text-ink-muted mb-3">
+                    By {course.instructor} · {course.totalLessons} lessons
+                  </p>
+                  <div className="mb-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-[12px] text-ink-muted">Progress</span>
+                      <span className="text-[12px] font-semibold text-primary">0%</span>
+                    </div>
+                    <div className="h-1.5 bg-grey-200 rounded-full">
+                      <div className="h-1.5 bg-primary rounded-full w-0" />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-ink-faint mb-4">
+                    {course.modules?.length || 0} modules · Not started
+                  </p>
+                  <Link
+                    href={`/courses/${course._id}`}
+                    className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
+                  >
+                    Start Course →
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-6 text-center">
+                <BookOpen size={32} className="text-ink-faint mx-auto mb-3" />
+                <p className="text-[14px] text-ink-muted mb-3">No courses yet</p>
+                <Link href="/courses" className="text-primary text-[13px] font-semibold underline">
+                  Browse courses →
+                </Link>
+              </div>
+            )}
           </div>
-          <div className="h-1.5 bg-grey-200 rounded-full">
-            <div className="h-1.5 bg-primary rounded-full w-0" />
-          </div>
-        </div>
-        <p className="text-[11px] text-ink-faint mb-4">
-          {course.modules?.length || 0} modules · Not started
-        </p>
-        <Link
-          href={`/courses/${course._id}`}
-          className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
-        >
-          Start Course →
-        </Link>
-      </div>
-    ))
-  ) : (
-    <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-6 text-center">
-      <BookOpen size={32} className="text-ink-faint mx-auto mb-3" />
-      <p className="text-[14px] text-ink-muted mb-3">No courses yet</p>
-      <Link href="/courses" className="text-primary text-[13px] font-semibold underline">
-        Browse courses →
-      </Link>
-    </div>
-  )}
-</div>
 
           {/* AI Tip Banner */}
           {roadmap && roadmap.stages.length > 0 && (
@@ -352,14 +351,14 @@ export default function DashboardPage() {
 
             {/* Recent Achievements */}
             <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
-  <h3 className="text-[15px] font-bold text-ink mb-4">Recent Achievements</h3>
-  <div className="flex flex-col items-center justify-center py-6 text-center">
-    <Trophy size={28} className="text-ink-faint mb-2" />
-    <p className="text-[13px] text-ink-muted">
-      Complete your first lesson to earn achievements
-    </p>
-  </div>
-</div>
+              <h3 className="text-[15px] font-bold text-ink mb-4">Recent Achievements</h3>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <Trophy size={28} className="text-ink-faint mb-2" />
+                <p className="text-[13px] text-ink-muted">
+                  Complete your first lesson to earn achievements
+                </p>
+              </div>
+            </div>
 
             {/* Recommended Courses */}
             <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
@@ -389,22 +388,22 @@ export default function DashboardPage() {
 
           {/* Today's Goals */}
           <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
-  <h3 className="text-[15px] font-bold text-ink mb-4">Today&apos;s Goals</h3>
-  {roadmap ? (
-    <div className="flex flex-col gap-2.5">
-      {roadmap.stages[0]?.topics.slice(0, 3).map((topic) => (
-        <div key={topic._id} className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full border-2 border-grey-200 flex-shrink-0" />
-          <span className="text-[13px] text-ink">{topic.name}</span>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <p className="text-[13px] text-ink-muted text-center py-4">
-      Generate your roadmap to see daily goals
-    </p>
-  )}
-</div>
+            <h3 className="text-[15px] font-bold text-ink mb-4">Today&apos;s Goals</h3>
+            {roadmap ? (
+              <div className="flex flex-col gap-2.5">
+                {roadmap.stages[0]?.topics.slice(0, 3).map((topic) => (
+                  <div key={topic._id} className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full border-2 border-grey-200 flex-shrink-0" />
+                    <span className="text-[13px] text-ink">{topic.name}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-ink-muted text-center py-4">
+                Generate your roadmap to see daily goals
+              </p>
+            )}
+          </div>
 
           {/* Weekly Activity */}
           <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
@@ -457,33 +456,33 @@ export default function DashboardPage() {
 
           {/* Upcoming */}
           <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
-  <p className="text-[11px] font-bold text-primary uppercase tracking-wide mb-2">
-    Next Up
-  </p>
-  {roadmap ? (
-    <>
-      <p className="text-[14px] font-bold text-ink mb-1">
-        {roadmap.stages[0]?.topics[0]?.name || "Start learning"}
-      </p>
-      <div className="flex items-center gap-1 text-ink-muted mb-3">
-        <Clock size={12} />
-        <span className="text-[12px]">
-          Est. {roadmap.stages[0]?.topics[0]?.estimatedDays || 1} days
-        </span>
-      </div>
-      <Link
-        href="/courses"
-        className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2 rounded-full transition-all"
-      >
-        Browse Courses →
-      </Link>
-    </>
-  ) : (
-    <p className="text-[13px] text-ink-muted text-center py-4">
-      No roadmap yet
-    </p>
-  )}
-</div>
+            <p className="text-[11px] font-bold text-primary uppercase tracking-wide mb-2">
+              Next Up
+            </p>
+            {roadmap ? (
+              <>
+                <p className="text-[14px] font-bold text-ink mb-1">
+                  {roadmap.stages[0]?.topics[0]?.name || "Start learning"}
+                </p>
+                <div className="flex items-center gap-1 text-ink-muted mb-3">
+                  <Clock size={12} />
+                  <span className="text-[12px]">
+                    Est. {roadmap.stages[0]?.topics[0]?.estimatedDays || 1} days
+                  </span>
+                </div>
+                <Link
+                  href="/courses"
+                  className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2 rounded-full transition-all"
+                >
+                  Browse Courses →
+                </Link>
+              </>
+            ) : (
+              <p className="text-[13px] text-ink-muted text-center py-4">
+                No roadmap yet
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

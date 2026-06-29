@@ -82,8 +82,9 @@ const FILTER_TABS = ["All", "Web Dev", "Data Science", "UI/UX", "Python", "Cloud
 // ─────────────────────────────────────────────────────────────
 
 // Returns a Lucide icon + bg colour based on category string
-function getCourseIcon(category: string): { icon: React.ReactNode; bg: string } {
-  const cat = category.toLowerCase();
+// Guards against undefined/null category so it never crashes
+function getCourseIcon(category: string | undefined | null): { icon: React.ReactNode; bg: string } {
+  const cat = (category ?? "").toLowerCase();
 
   if (cat.includes("python") || cat.includes("data")) {
     return { icon: <BarChart2 size={20} color="#1A3ADB" />, bg: "#E8EDFF" };
@@ -103,8 +104,8 @@ function getCourseIcon(category: string): { icon: React.ReactNode; bg: string } 
   return { icon: <BookOpen size={20} color="#1A3ADB" />, bg: "#E8EDFF" };
 }
 
-// Capitalise first letter only
-function formatLevel(level: string): string {
+// Capitalise first letter only — guards against undefined/null
+function formatLevel(level: string | undefined | null): string {
   if (!level) return "";
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
@@ -178,14 +179,14 @@ function RealCourseCard({ course, enrolled, progressPercent, onView }: RealCardP
       {/* Card body */}
       <div className="px-5 pb-5 flex flex-col gap-2 flex-1">
         <h3 className="font-bold text-[#0D1220] text-[15px] leading-snug mt-3">
-          {course.title}
+          {course.title ?? "Untitled course"}
         </h3>
 
         <p className="text-[12px] text-[#8A97B8]">
-          {formatLevel(course.level)} · {course.totalLessons} lessons
+          {formatLevel(course.level)} · {course.totalLessons ?? 0} lessons
         </p>
 
-        <p className="text-[12px] text-[#3D4A6B]">by {course.instructor}</p>
+        <p className="text-[12px] text-[#3D4A6B]">by {course.instructor ?? "Unknown instructor"}</p>
 
         <div className="flex items-center gap-2 mt-1">
           <StarRating rating={displayRating} />
@@ -306,7 +307,11 @@ export default function CoursesPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  // Whether the logged-in user has a roadmap at all.
+  // Since there's no real enrollment API yet, having a roadmap
+  // is treated as "enrolled in every course" — same workaround
+  // used on the dashboard and lesson pages.
+  const [hasRoadmap, setHasRoadmap] = useState(false);
 
   // Static progress map — keyed by course._id
   // Replace values once a real /api/progress endpoint is available
@@ -323,18 +328,11 @@ export default function CoursesPage() {
         setCourses(list);
         setFiltered(list);
 
-        // Mark enrolled courses by matching roadmap titles to fetched courses
+        // Check if the user has a roadmap at all — that's our
+        // current stand-in for "enrolled". No title-matching needed
+        // since the roadmap has stages/topics, not course references.
         const raw = localStorage.getItem("skillpath_roadmap");
-        if (raw) {
-          const roadmap = JSON.parse(raw);
-          const roadmapTitles: string[] = (roadmap?.courses ?? []).map(
-            (c: { title?: string }) => (c.title ?? "").toLowerCase()
-          );
-          const ids = list
-            .filter((c) => roadmapTitles.includes(c.title.toLowerCase()))
-            .map((c) => c._id);
-          setEnrolledIds(ids);
-        }
+        setHasRoadmap(!!raw);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load courses";
         setError(message);
@@ -355,7 +353,8 @@ export default function CoursesPage() {
     const tab = activeTab.toLowerCase();
 
     const result = courses.filter((c) => {
-      const cat = c.category.toLowerCase();
+      // Guard against missing category so this never crashes
+      const cat = (c.category ?? "").toLowerCase();
       if (tab === "web dev") return cat.includes("web") || cat.includes("javascript");
       if (tab === "data science") return cat.includes("data") || cat.includes("science");
       if (tab === "ui/ux") return cat.includes("ui") || cat.includes("ux") || cat.includes("design");
@@ -374,9 +373,10 @@ export default function CoursesPage() {
     router.push(`/courses/${id}`);
   }
 
-  // Split into enrolled vs not-enrolled for the two rows
-  const recommended = filtered.filter((c) => enrolledIds.includes(c._id));
-  const notEnrolled = filtered.filter((c) => !enrolledIds.includes(c._id));
+  // If the user has a roadmap, every real course shows as "enrolled".
+  // Otherwise none are — they'll see "View course" instead of "Continue".
+  const recommended = hasRoadmap ? filtered : [];
+  const notEnrolled  = hasRoadmap ? [] : filtered;
 
   // ── Build tab button elements (Rule 10 — no .map in JSX) ──
   const tabButtons = FILTER_TABS.map((tab) => (
