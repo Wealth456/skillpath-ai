@@ -76,8 +76,10 @@ export interface QuizAttempt {
   _id: string;
   score: number;
   passed: boolean;
+  correctCount: number;
+  wrongCount: number;
   timeTaken: number;
-  createdAt: string;
+  attemptedAt: string;
 }
 
 interface GetAttemptsResponse {

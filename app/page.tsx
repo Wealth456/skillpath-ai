@@ -49,7 +49,7 @@ function Navbar() {
         <div className="hidden md:flex items-center gap-8">
           <a href="#how-it-works" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">How it works</a>
           <a href="#features" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">Features</a>
-          <a href="#courses" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">Courses</a>
+          {/* <a href="#courses" className="text-[14px] text-ink-muted hover:text-ink transition-colors font-medium">Courses</a> */}
         </div>
 
         <div className="hidden md:flex items-center gap-3">

@@ -95,12 +95,14 @@ function LoginForm() {
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-8 border border-border shadow-card-default">
 
           <div className="mb-5">
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">
+            <label htmlFor="login-email" className="block text-[13px] font-semibold text-ink mb-1.5">
               Email or Phone number
             </label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
+                id="login-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -120,12 +122,14 @@ function LoginForm() {
           </div>
 
           <div className="mb-2">
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">
+            <label htmlFor="login-password" className="block text-[13px] font-semibold text-ink mb-1.5">
               Password
             </label>
             <div className="relative">
               <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
+                id="login-password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

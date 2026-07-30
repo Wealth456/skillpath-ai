@@ -12,20 +12,18 @@ import {
   Plus,
   ClipboardList,
 } from "lucide-react";
-import { getCourse, markLessonComplete } from "@/lib/api/learning";
-import type { Course, CourseModule, Lesson } from "@/lib/api/learning";
+import { getCourse, markLessonComplete, getEnrollments } from "@/lib/api/learning";
+import type { Course, CourseModule, Lesson, Enrollment } from "@/lib/api/learning";
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
 
-// Explicit interface fixes the unknown[] ReactNode error
 interface ContentBlock {
   type: "heading" | "paragraph" | "code" | "callout";
   text: string;
 }
 
-// Explicit interface fixes the resources shorthand error
 interface ResourceLink {
   label: string;
   href: string;
@@ -123,7 +121,6 @@ function CodeBlock({ code }: { code: string }) {
 
 // ─────────────────────────────────────────────────────────────
 // CONTENT RENDERER
-// Explicit return type React.ReactElement[] fixes unknown[] error
 // ─────────────────────────────────────────────────────────────
 
 function LessonContent({ content }: { content: string }) {
@@ -227,7 +224,6 @@ export default function LessonPage() {
 
   const [course, setCourse]                         = useState<Course | null>(null);
   const [currentLesson, setCurrentLesson]           = useState<Lesson | null>(null);
-  // Explicit type fixes the 'order' and 'title' does not exist on 'never' error
   const [currentModule, setCurrentModule]           = useState<CourseModule | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [marking, setMarking]                       = useState(false);
@@ -236,7 +232,6 @@ export default function LessonPage() {
   const [notes, setNotes]                           = useState<string[]>([]);
   const [noteInput, setNoteInput]                   = useState("");
   const [addingNote, setAddingNote]                 = useState(false);
-  // New state — controls the "Take Quiz" prompt modal shown after marking complete
   const [showQuizPrompt, setShowQuizPrompt]         = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
 
@@ -250,8 +245,6 @@ export default function LessonPage() {
         const fetched: Course = response.data.data.course;
         setCourse(fetched);
 
-        // Locate the lesson and its parent module
-        // Typed explicitly to avoid 'never' inference
         let foundLesson: Lesson | null       = null;
         let foundModule: CourseModule | null = null;
 
@@ -268,7 +261,6 @@ export default function LessonPage() {
         setCurrentModule(foundModule);
 
         if (foundModule && foundLesson) {
-          // foundModule is CourseModule here — cast to satisfy TS
           const mod = foundModule as CourseModule;
           const les = foundLesson as Lesson;
           window.dispatchEvent(
@@ -281,8 +273,18 @@ export default function LessonPage() {
           );
         }
 
-        const saved = localStorage.getItem(`skillpath_completed_${courseId}`);
-        if (saved) setCompletedLessonIds(JSON.parse(saved));
+        // ── Completed lessons now come from the real backend ──
+        // Replaces reading `skillpath_completed_${courseId}` from localStorage.
+        // Non-fatal: if this call fails, the page still renders the lesson,
+        // just with completedLessonIds staying empty until it succeeds.
+        try {
+          const enrollmentsRes = await getEnrollments();
+          const enrollments: Enrollment[] = enrollmentsRes.data.data.enrollments ?? [];
+          const matched = enrollments.find((e) => e.course._id === courseId);
+          setCompletedLessonIds(matched?.progress?.completedLessons ?? []);
+        } catch {
+          setCompletedLessonIds([]);
+        }
 
         const savedNotes = localStorage.getItem(`skillpath_notes_${lessonId}`);
         if (savedNotes) setNotes(JSON.parse(savedNotes));
@@ -303,12 +305,12 @@ export default function LessonPage() {
     if (!currentLesson || marking) return;
     try {
       setMarking(true);
-      await markLessonComplete({ courseId, lessonId });
-      const updated = [...completedLessonIds, lessonId];
-      setCompletedLessonIds(updated);
-      localStorage.setItem(`skillpath_completed_${courseId}`, JSON.stringify(updated));
+      const response = await markLessonComplete({ courseId, lessonId });
 
-      // Show the "Take Quiz" modal instead of jumping straight to next lesson
+      // Use the backend's own completedLessons list as the source of truth,
+      // instead of manually appending lessonId and writing it to localStorage.
+      setCompletedLessonIds(response.data.data.progress.completedLessons ?? []);
+
       setShowQuizPrompt(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to mark complete";
@@ -318,13 +320,11 @@ export default function LessonPage() {
     }
   }
 
-  // ── Navigate to this lesson's quiz ──
   function handleTakeQuiz() {
     setShowQuizPrompt(false);
     router.push(`/courses/${courseId}/quiz/${lessonId}`);
   }
 
-  // ── Skip the quiz and go straight to the next lesson ──
   function handleSkipQuiz() {
     setShowQuizPrompt(false);
     navigateLesson("next");
@@ -353,7 +353,6 @@ export default function LessonPage() {
     router.push(`/courses/${courseId}/lessons/${targetLessonId}`);
   }
 
-  // ── Loading ──
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -362,7 +361,6 @@ export default function LessonPage() {
     );
   }
 
-  // ── Error / not found ──
   if (error || !course || !currentLesson || !currentModule) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -373,7 +371,6 @@ export default function LessonPage() {
     );
   }
 
-  // ── Derived values (safe — null checks passed above) ──
   const allLessons: Lesson[] = [];
   course.modules.forEach((mod) => mod.lessons.forEach((l) => allLessons.push(l)));
 
@@ -389,7 +386,6 @@ export default function LessonPage() {
     ? Math.round((completedLessonIds.length / totalLessons) * 100)
     : 0;
 
-  // ── Build sidebar items (Rule 10 — outside JSX) ──
   const sidebarItems: React.ReactElement[] = currentModule.lessons.map((lesson, idx) => (
     <LessonItem
       key={lesson._id}
@@ -402,7 +398,6 @@ export default function LessonPage() {
     />
   ));
 
-  // ── Build note items (Rule 10 — outside JSX) ──
   const noteItems: React.ReactElement[] = notes.map(
     (note: string, i: number): React.ReactElement => (
       <p
@@ -414,8 +409,6 @@ export default function LessonPage() {
     )
   );
 
-  // ── Build resource links (Rule 10 — outside JSX) ──
-  // Typed as ResourceLink[] to fix the shorthand inference error
   const resources: ResourceLink[] = [
     { label: cap(course.category) + " Docs",           href: "#" },
     { label: cap(course.category) + " Cheatsheet PDF", href: "#" },
@@ -435,9 +428,6 @@ export default function LessonPage() {
     )
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col min-h-screen bg-white">
 
@@ -492,7 +482,6 @@ export default function LessonPage() {
       {/* ── BODY ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Left sidebar */}
         <aside className="w-[240px] flex-shrink-0 border-r border-[#E4E8F5] flex flex-col overflow-y-auto">
           <div className="px-4 py-4 border-b border-[#E4E8F5]">
             <p className="text-[13px] font-black text-[#0D1220]">
@@ -504,7 +493,6 @@ export default function LessonPage() {
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="flex-1 overflow-y-auto px-10 py-8 pb-24">
           <h2 className="text-[22px] font-black text-[#0D1220] mb-1">
             {currentLesson.title}
@@ -517,10 +505,8 @@ export default function LessonPage() {
           <LessonContent content={currentLesson.content} />
         </main>
 
-        {/* Right panel */}
         <aside className="w-[280px] flex-shrink-0 border-l border-[#E4E8F5] flex flex-col overflow-y-auto px-5 py-6 gap-6">
 
-          {/* Quick Notes */}
           <div>
             <h4 className="text-[14px] font-bold text-[#0D1220] mb-3">Quick Notes</h4>
             <div className="mb-3">
@@ -566,13 +552,11 @@ export default function LessonPage() {
             )}
           </div>
 
-          {/* Resources */}
           <div>
             <h4 className="text-[14px] font-bold text-[#0D1220] mb-2">Resources</h4>
             <div className="flex flex-col">{resourceItems}</div>
           </div>
 
-          {/* Your Progress */}
           <div>
             <h4 className="text-[14px] font-bold text-[#0D1220] mb-3">Your Progress</h4>
             <div className="w-full h-2 bg-[#E5E9F5] rounded-full overflow-hidden mb-2">
@@ -584,6 +568,19 @@ export default function LessonPage() {
             <p className="text-[12px] text-[#8A97B8]">
               {completedInModule} of {currentModule.lessons.length} lessons done in Module {moduleIndex}
             </p>
+
+            {/* Persistent quiz access — the modal only ever shows once,
+                right after marking complete, so this is the only way
+                back to the quiz if the user skipped it earlier. */}
+            {completedLessonIds.includes(lessonId) && (
+              <button
+                onClick={() => router.push(`/courses/${courseId}/quiz/${lessonId}`)}
+                className="flex items-center gap-1.5 mt-4 text-[13px] font-semibold text-[#1A3ADB] hover:underline"
+              >
+                <ClipboardList size={14} />
+                Take Quiz
+              </button>
+            )}
           </div>
 
         </aside>
@@ -623,8 +620,6 @@ export default function LessonPage() {
       </div>
 
       {/* ── QUIZ PROMPT MODAL ── */}
-      {/* Shown right after marking the lesson complete. Lets the user
-          choose to take the AI-generated quiz now or skip to the next lesson. */}
       {showQuizPrompt && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-6">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full flex flex-col items-center gap-4 text-center">

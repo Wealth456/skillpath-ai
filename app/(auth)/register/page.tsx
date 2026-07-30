@@ -88,10 +88,12 @@ export default function RegisterPage() {
           {/* First + Last name */}
           <div className="flex gap-4 mb-5">
             <div className="flex-1">
-              <label className="block text-[13px] font-semibold text-ink mb-1.5">First name</label>
+              <label htmlFor="reg-firstname" className="block text-[13px] font-semibold text-ink mb-1.5">First name</label>
               <div className="relative">
                 <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
                 <input
+                  id="reg-firstname"
+                  name="firstName"
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
@@ -102,10 +104,12 @@ export default function RegisterPage() {
               </div>
             </div>
             <div className="flex-1">
-              <label className="block text-[13px] font-semibold text-ink mb-1.5">Last name</label>
+              <label htmlFor="reg-lastname" className="block text-[13px] font-semibold text-ink mb-1.5">Last name</label>
               <div className="relative">
                 <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
                 <input
+                  id="reg-lastname"
+                  name="lastName"
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -119,10 +123,12 @@ export default function RegisterPage() {
 
           {/* Email */}
           <div className="mb-5">
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">Email or Phone number</label>
+            <label htmlFor="reg-email" className="block text-[13px] font-semibold text-ink mb-1.5">Email or Phone number</label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
+                id="reg-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -135,10 +141,12 @@ export default function RegisterPage() {
 
           {/* Password */}
           <div className="mb-5">
-            <label className="block text-[13px] font-semibold text-ink mb-1.5">Password</label>
+            <label htmlFor="reg-password" className="block text-[13px] font-semibold text-ink mb-1.5">Password</label>
             <div className="relative">
               <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
+                id="reg-password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

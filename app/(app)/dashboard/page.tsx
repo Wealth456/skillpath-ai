@@ -12,7 +12,10 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
-import { getCourses } from "@/lib/api/learning";
+import { getCourses, getProgressSummary, getEnrollments } from "@/lib/api/learning";
+import type { Enrollment } from "@/lib/api/learning";
+import { getRoadmap } from "@/lib/api/roadmap";
+import { useRouter } from "next/navigation";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 interface Lesson {
@@ -114,45 +117,119 @@ function WeeklyChart() {
 
 // ── DASHBOARD PAGE ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const [courses, setCourses]   = useState<Course[]>([]);
   const [roadmap, setRoadmap]   = useState<Roadmap | null>(null);
   const [userName, setUserName] = useState("there");
   const [loading, setLoading]   = useState(true);
 
+  // Real per-course progress — now sourced from GET /api/learning/progress/summary
+  // instead of localStorage completed lesson IDs. Keyed by courseId → percentage (0-100).
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+
+  // Total lessons completed across ALL courses — now the `totalLessonsCompleted`
+  // field from the progress summary, instead of a value computed client-side
+  // from localStorage.
+  const [totalLessonsDone, setTotalLessonsDone] = useState(0);
+
+  // Full course objects the user is actually enrolled in (from
+  // GET /api/learning/enrollments), sorted by progress descending.
+  // Drives the "Continue Learning" section — previously this section
+  // just showed courses.slice(0, 2), i.e. whatever 2 courses happened
+  // to be first in the full catalogue, enrolled or not.
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
+
+  // Just the IDs of enrolled courses, used to filter them OUT of
+  // "Recommended for You" so it doesn't recommend courses the user
+  // is already taking.
+  const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+
   useEffect(() => {
     // ── READ USER NAME ──────────────────────────────────────────────────────
     const name = localStorage.getItem("skillpath_name") || "";
-    // Show only first name in the greeting
     setUserName(name.split(" ")[0] || "there");
 
     // ── READ THIS USER'S ROADMAP ────────────────────────────────────────────
-    // This was saved by the generating page after the AI built it.
-    // Each user has a DIFFERENT roadmap saved here because the AI
-    // personalises it based on their goal, level, and daily time.
+    // Fast path: already cached locally.
     const savedRoadmap = localStorage.getItem("skillpath_roadmap");
     if (savedRoadmap) {
       try {
         setRoadmap(JSON.parse(savedRoadmap));
       } catch {
-        // If JSON is corrupted, ignore it
+        localStorage.removeItem("skillpath_roadmap");
+      }
+    } else {
+      // Fallback: nothing cached (e.g. right after login, since login()
+      // clears this key) — ask the backend if this user already has one.
+      const userId = localStorage.getItem("skillpath_user_id");
+      if (userId) {
+        getRoadmap(userId)
+          .then((response) => {
+            const fetched = response.data?.data?.roadmap;
+            if (fetched) {
+              setRoadmap(fetched);
+              localStorage.setItem("skillpath_roadmap", JSON.stringify(fetched));
+            }
+          })
+          .catch(() => {
+            // 404 (genuinely no roadmap) or network error — dashboard
+            // already handles a null `roadmap` gracefully.
+          });
       }
     }
 
-    // ── FETCH COURSES FROM API ──────────────────────────────────────────────
-    // These are the courses available on the platform.
-    // The user's progress per course is tracked as they complete lessons.
-    async function fetchCourses() {
+    // ── FETCH COURSES + PROGRESS SUMMARY FROM API ───────────────────────────
+    async function fetchDashboardData() {
       try {
         const res = await getCourses();
-        setCourses(res.data?.data?.courses || []);
-      } catch (err) {
+        const list: Course[] = res.data?.data?.courses || [];
+        setCourses(list);
+      } catch (err: unknown) {
         console.error("Failed to fetch courses:", err);
+      }
+
+    // totalLessonsCompleted still comes from the summary endpoint —
+      // that field IS reliable, we just can't use its per-course
+      // breakdown since it has no courseId to match against.
+      try {
+        const summaryRes = await getProgressSummary();
+        const summary = summaryRes.data.data.summary;
+        setTotalLessonsDone(summary.totalLessonsCompleted);
+      } catch (err: unknown) {
+        console.error("Failed to fetch progress summary:", err);
+        setTotalLessonsDone(0);
+      }
+
+      // Enrollments are the single source of truth for per-course progress —
+      // same data source the course detail page and Profile page use, so
+      // they can never disagree with the dashboard.
+      try {
+        const enrollRes = await getEnrollments();
+        const enrollments: Enrollment[] = enrollRes.data.data.enrollments ?? [];
+
+        const progress: Record<string, number> = {};
+        enrollments.forEach((enrollment) => {
+          progress[enrollment.course._id] = enrollment.progress?.progressPercent ?? 0;
+        });
+        setProgressMap(progress);
+
+        const sortedByProgress = [...enrollments].sort(
+          (a, b) => (b.progress?.progressPercent ?? 0) - (a.progress?.progressPercent ?? 0)
+        );
+
+        setEnrolledCourses(sortedByProgress.map((enrollment) => enrollment.course));
+        setEnrolledIds(enrollments.map((enrollment) => enrollment.course._id));
+      } catch (err: unknown) {
+        console.error("Failed to fetch enrollments:", err);
+        setProgressMap({});
+        setEnrolledCourses([]);
+        setEnrolledIds([]);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchCourses();
+    fetchDashboardData();
   }, []);
 
   function getGreeting() {
@@ -160,6 +237,15 @@ export default function DashboardPage() {
     if (hour < 12) return "Good morning";
     if (hour < 17) return "Good afternoon";
     return "Good evening";
+  }
+
+  // Returns the number of modules in a course that are "not started"
+  // for display text like "2 modules · Not started" / "In progress"
+  function getCourseStatusLabel(course: Course, percent: number): string {
+    const moduleCount = course.modules?.length || 0;
+    if (percent === 0) return `${moduleCount} modules · Not started`;
+    if (percent === 100) return `${moduleCount} modules · Completed`;
+    return `${moduleCount} modules · In progress`;
   }
 
   if (loading) {
@@ -198,8 +284,8 @@ export default function DashboardPage() {
         <StatCard
           icon={<CheckCircle2 size={15} className="text-primary" />}
           label="Lessons Done"
-          value={0}
-          sub="Start learning!"
+          value={totalLessonsDone}
+          sub={totalLessonsDone > 0 ? "Keep it up!" : "Start learning!"}
         />
         <StatCard
           icon={<Flame size={15} className="text-primary" />}
@@ -223,39 +309,46 @@ export default function DashboardPage() {
 
           {/* Continue Learning */}
           <div className="flex gap-4">
-            {courses.length > 0 ? (
-              courses.slice(0, 2).map((course) => (
-                <div
-                  key={course._id}
-                  className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
-                >
-                  <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
-                    {course.category}
-                  </div>
-                  <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
-                  <p className="text-[12px] text-ink-muted mb-3">
-                    By {course.instructor} · {course.totalLessons} lessons
-                  </p>
-                  <div className="mb-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[12px] text-ink-muted">Progress</span>
-                      <span className="text-[12px] font-semibold text-primary">0%</span>
-                    </div>
-                    <div className="h-1.5 bg-grey-200 rounded-full">
-                      <div className="h-1.5 bg-primary rounded-full w-0" />
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-ink-faint mb-4">
-                    {course.modules?.length || 0} modules · Not started
-                  </p>
-                  <Link
-                    href={`/courses/${course._id}`}
-                    className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
+            {enrolledCourses.length > 0 ? (
+              enrolledCourses.slice(0, 2).map((course) => {
+                // Read this course's real progress percentage
+                const percent = progressMap[course._id] ?? 0;
+                return (
+                  <div
+                    key={course._id}
+                    className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
                   >
-                    Start Course →
-                  </Link>
-                </div>
-              ))
+                    <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
+                      {course.category}
+                    </div>
+                    <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
+                    <p className="text-[12px] text-ink-muted mb-3">
+                      By {course.instructor} · {course.totalLessons} lessons
+                    </p>
+                    <div className="mb-1">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-[12px] text-ink-muted">Progress</span>
+                        <span className="text-[12px] font-semibold text-primary">{percent}%</span>
+                      </div>
+                      <div className="h-1.5 bg-grey-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-1.5 bg-primary rounded-full transition-all duration-500"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-ink-faint mb-4">
+                      {getCourseStatusLabel(course, percent)}
+                    </p>
+                    <Link
+                      href={`/courses/${course._id}`}
+                      className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
+                    >
+                      {percent > 0 ? "Continue Course →" : "Start Course →"}
+                    </Link>
+                  </div>
+                );
+              })
             ) : (
               <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-6 text-center">
                 <BookOpen size={32} className="text-ink-faint mx-auto mb-3" />
@@ -315,12 +408,12 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              {/* Horizontal scrollable stage cards */}
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {roadmap.stages.map((stage, i) => (
                   <div
                     key={stage.stage}
-                    className={`flex-shrink-0 w-44 p-4 rounded-xl border-2 ${
+                    onClick={() => router.push("/roadmap")}
+                    className={`flex-shrink-0 w-44 p-4 rounded-xl border-2 cursor-pointer transition-transform hover:scale-[1.02] ${
                       i === 0
                         ? "border-primary bg-primary-light"
                         : "border-border bg-grey-100"
@@ -364,7 +457,7 @@ export default function DashboardPage() {
             <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
               <h3 className="text-[15px] font-bold text-ink mb-4">Recommended for You</h3>
               <div className="flex flex-col gap-3">
-                {courses.map((course) => (
+                {courses.filter((course) => !enrolledIds.includes(course._id)).map((course) => (
                   <div key={course._id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
                       <BookOpen size={13} className="text-primary flex-shrink-0" />
@@ -424,7 +517,6 @@ export default function DashboardPage() {
                 {roadmap.stages.reduce((acc, s) => acc + s.topics.length, 0)} topics
               </p>
 
-              {/* Mini stage list */}
               <div className="flex flex-col gap-1.5 mb-4">
                 {roadmap.stages.slice(0, 3).map((stage, i) => (
                   <div key={stage.stage} className="flex items-center gap-2">

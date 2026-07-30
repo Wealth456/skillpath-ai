@@ -137,7 +137,7 @@ export default function QuizResultsPage() {
 
   // Build past attempt rows — Rule 10
   const attemptRows = attempts.map((attempt) => {
-    const date = new Date(attempt.createdAt);
+    const date = new Date(attempt.attemptedAt);
     const dateDisplay = date.toLocaleDateString("en-GB", {
       day: "numeric",
       month: "short",

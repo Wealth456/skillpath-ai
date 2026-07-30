@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, ChevronRight, Settings } from "lucide-react";
+import { getRoadmap } from "@/lib/api/roadmap";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 interface RoadmapTopic {
@@ -30,27 +31,66 @@ const [userLevel, setUserLevel] = useState("Beginner");
 const [dailyTime] = useState("30-60 min/day");
   const router = useRouter();
 
+  const [checkedStorage, setCheckedStorage] = useState(false);
+
   useEffect(() => {
-    // Read roadmap saved during onboarding generating page
-    const saved = localStorage.getItem("skillpath_roadmap");
-    if (saved) {
-      try {
-        setRoadmap(JSON.parse(saved));
-      } catch {
-        // corrupted — redirect back
-        router.push("/dashboard");
+    async function loadRoadmap() {
+      // Fast path — roadmap already cached locally
+      const saved = localStorage.getItem("skillpath_roadmap");
+      if (saved) {
+        try {
+          setRoadmap(JSON.parse(saved));
+          setCheckedStorage(true);
+          return;
+        } catch {
+          localStorage.removeItem("skillpath_roadmap");
+        }
       }
+
+      // Fallback — ask the backend if this user already has a roadmap
+      const userId = localStorage.getItem("skillpath_user_id");
+      if (userId) {
+        try {
+          const response = await getRoadmap(userId);
+          const fetched = response.data?.data?.roadmap;
+          if (fetched) {
+            setRoadmap(fetched);
+            localStorage.setItem("skillpath_roadmap", JSON.stringify(fetched));
+          }
+        } catch {
+          // 404 (no roadmap) or network error — either way, fall through
+          // to the "no roadmap found" screen below
+        }
+      }
+
+      setCheckedStorage(true);
     }
 
-    // Read user info
-  
+    loadRoadmap();
+
     const level = localStorage.getItem("sp_level") || "beginner";
-    
     setUserLevel(
       level === "beginner" ? "Beginner" :
       level === "intermediate" ? "Intermediate" : "Advanced"
     );
   }, [router]);
+
+  if (!roadmap && checkedStorage) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
+        <p className="text-[15px] font-bold text-ink mb-2">No roadmap found</p>
+        <p className="text-[13px] text-ink-muted mb-5 max-w-sm">
+          We couldn&apos;t find a saved roadmap for your account. Generate a new one to continue.
+        </p>
+        <button
+          onClick={() => router.push("/onboarding/goal")}
+          className="bg-primary hover:bg-primary-dark text-white text-[13px] font-bold px-6 py-2.5 rounded-full transition-all"
+        >
+          Generate my roadmap →
+        </button>
+      </div>
+    );
+  }
 
   if (!roadmap) {
     return (

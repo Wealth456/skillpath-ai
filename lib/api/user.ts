@@ -1,8 +1,9 @@
 // lib/api/user.ts
 //
 // User-related API calls.
-// Currently: updateProfile() — used at the end of onboarding
-// to save the user's goal, level, and daily study time.
+// - updateProfile() — used at the end of onboarding to save goal, level, dailyTime.
+// - getProfile()    — fetches the logged-in user's full profile (name, email,
+//                      preferences, createdAt). Used on the Profile page.
 
 import api from "@/lib/axios";
 // The shared Axios instance already injects the Bearer token,
@@ -12,15 +13,9 @@ import api from "@/lib/axios";
 
 // The three fields collected across onboarding Steps 1–3
 interface UpdateProfilePayload {
-  goal: string;
-  // e.g. "Become a Frontend Developer", "Learn Python"
-
+  goal: string;         // e.g. "Become a Frontend Developer", "Learn Python"
   currentLevel: "beginner" | "intermediate" | "advanced";
-  // TypeScript union type — only these three strings are allowed.
-  // If you type "Beginner" (capital B), TypeScript warns you.
-
-  dailyTime: number;
-  // Minutes per day the user wants to study. e.g. 30, 60, 120
+  dailyTime: number;    // Minutes per day the user wants to study. e.g. 30, 60, 120
 }
 
 // What the server sends back after a successful profile update
@@ -37,7 +32,26 @@ interface UpdateProfileResponse {
   };
 }
 
-// ─── UPDATE PROFILE ──────────────────────────────────────────────────────────
+// What the server sends back for GET /api/user/profile
+interface GetProfileResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: {
+      _id: string;
+      name: string;
+      email: string;
+      createdAt: string;
+      preferences: {
+        goal: string;
+        currentLevel: string;
+        dailyTime: number;
+      };
+    };
+  };
+}
+
+// ─── UPDATE PROFILE ────────────────────────────────────────────────────────
 // Sends a PUT request to /api/user/profile.
 // The Authorization header is added automatically by lib/axios.ts.
 //
@@ -54,7 +68,19 @@ export async function updateProfile(payload: UpdateProfilePayload) {
   const response = await api.put<UpdateProfileResponse>(
     "/api/user/profile",
     payload
-    // api.put(url, body) — sends a PUT request with the payload as JSON body
   );
+  return response;
+}
+
+// ─── GET PROFILE ────────────────────────────────────────────────────────────
+// Fetches the currently logged-in user's full profile — name, email,
+// createdAt, and preferences (goal, currentLevel, dailyTime).
+// Used on: app/(app)/profile/page.tsx
+//
+// Usage:
+//   const response = await getProfile();
+//   const user = response.data.data.user;
+export async function getProfile() {
+  const response = await api.get<GetProfileResponse>("/api/user/profile");
   return response;
 }

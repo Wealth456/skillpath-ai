@@ -15,9 +15,10 @@ import {
   Map,
   CheckCircle2,
   Lock,
+  Check,
 } from "lucide-react";
-import { getCourse } from "@/lib/api/learning";
-import type { Course, CourseModule } from "@/lib/api/learning";
+import { getCourse, getEnrollments, enrollInCourse } from "@/lib/api/learning";
+import type { Course, CourseModule, Enrollment } from "@/lib/api/learning";
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -72,14 +73,14 @@ function StarRating({ rating }: { rating: number }) {
 // MODULE STATUS
 // ─────────────────────────────────────────────────────────────
 
-type ModuleStatus = "completed" | "in-progress" | "locked";
+type ModuleStatus = "completed" | "in-progress" | "not-started";
 
 function getModuleStatus(mod: CourseModule, completedIds: string[]): ModuleStatus {
   const ids   = mod.lessons.map((l) => l._id);
   const done  = ids.filter((id) => completedIds.includes(id)).length;
   if (ids.length > 0 && done === ids.length) return "completed";
   if (done > 0) return "in-progress";
-  return "locked";
+  return "not-started";
 }
 
 function getModuleProgress(mod: CourseModule, completedIds: string[]): number {
@@ -103,55 +104,65 @@ interface ModuleRowProps {
 function ModuleRow({ mod, index, status, progress, onContinue }: ModuleRowProps) {
   const isCompleted  = status === "completed";
   const isInProgress = status === "in-progress";
-  const isLocked     = status === "locked";
+  const isNotStarted = status === "not-started";
 
   return (
     <div
       className={`flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all bg-white ${
         isInProgress ? "border-[#1A3ADB] shadow-sm" : "border-[#E4E8F5]"
-      } ${isLocked ? "opacity-50" : ""}`}
+      }`}
     >
       {/* Icon */}
       <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#E8EDFF] flex items-center justify-center">
         {isCompleted  && <CheckCircle2 size={17} color="#1A3ADB" />}
         {isInProgress && <BookOpen     size={17} color="#1A3ADB" />}
-        {isLocked     && <Lock         size={17} color="#8A97B8" />}
+        {isNotStarted && <BookOpen     size={17} color="#8A97B8" />}
       </div>
 
       {/* Info + progress bar */}
       <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <p className={`text-[14px] font-semibold leading-tight ${isLocked ? "text-[#8A97B8]" : "text-[#0D1220]"}`}>
+        <p className="text-[14px] font-semibold leading-tight text-[#0D1220]">
           Module {index + 1} · {mod.title}
         </p>
         <p className="text-[12px] text-[#8A97B8]">
           {mod.lessons.length} lessons
           {isCompleted  && " · Completed"}
           {isInProgress && " · In progress"}
+          {isNotStarted && " · Not started"}
         </p>
-        {/* Progress bar — only completed + in-progress */}
-        {!isLocked && (
-          <div className="w-40 h-1.5 bg-[#E5E9F5] rounded-full overflow-hidden mt-0.5">
-            <div
-              className="h-full bg-[#1A3ADB] rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
+        {/* Progress bar — completed + in-progress only; not-started shows empty bar */}
+        <div className="w-40 h-1.5 bg-[#E5E9F5] rounded-full overflow-hidden mt-0.5">
+          <div
+            className="h-full bg-[#1A3ADB] rounded-full transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
 
       {/* Action button */}
       <div className="flex-shrink-0 w-24 flex justify-end">
         {isCompleted && (
-          <button className="px-4 py-2 rounded-xl border border-[#E4E8F5] text-[13px] font-semibold text-[#3D4A6B] hover:bg-[#E8EDFF] transition-colors">
-            Review
-          </button>
-        )}
+  <button
+    onClick={() => onContinue(mod._id)}
+    className="px-4 py-2 rounded-xl border border-[#E4E8F5] text-[13px] font-semibold text-[#3D4A6B] hover:bg-[#E8EDFF] transition-colors"
+  >
+    Review
+  </button>
+)}
         {isInProgress && (
           <button
             onClick={() => onContinue(mod._id)}
             className="flex items-center gap-1 px-4 py-2 rounded-xl bg-[#1A3ADB] text-white text-[13px] font-semibold hover:bg-[#1228B0] transition-colors"
           >
             Continue <ChevronRight size={13} />
+          </button>
+        )}
+        {isNotStarted && (
+          <button
+            onClick={() => onContinue(mod._id)}
+            className="flex items-center gap-1 px-4 py-2 rounded-xl border border-[#1A3ADB] text-[#1A3ADB] text-[13px] font-semibold hover:bg-[#E8EDFF] transition-colors"
+          >
+            Start <ChevronRight size={13} />
           </button>
         )}
       </div>
@@ -174,6 +185,15 @@ export default function CourseDetailPage() {
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   const [isEnrolled, setIsEnrolled]                 = useState(false);
 
+  // Tracks whether the "Enroll now" button on THIS page is mid-request,
+  // so we can disable it and show a loading label while the POST is in flight.
+  const [enrolling, setEnrolling] = useState(false);
+
+  // Error message shown if enrolling from this page fails —
+  // separate from the page-load `error` so a failed enroll click
+  // doesn't hide the course content that's already rendered.
+  const [enrollError, setEnrollError] = useState("");
+
   useEffect(() => {
     if (!courseId) return;
     async function load() {
@@ -192,14 +212,25 @@ export default function CourseDetailPage() {
           })
         );
 
-        // ── Check enrollment via roadmap in localStorage ──
-        const raw = localStorage.getItem("skillpath_roadmap");
-        if (raw) {
-          const roadmap = JSON.parse(raw);
-          const titles: string[] = (roadmap?.courses ?? []).map(
-            (c: { title?: string }) => (c.title ?? "").toLowerCase()
-          );
-          setIsEnrolled(titles.includes(fetched.title.toLowerCase()));
+        // ── Check enrollment via the real backend ──
+        // Replaces the old localStorage roadmap-title-matching hack.
+        // Non-fatal: if this call fails, the page still shows the
+        // course, just defaults to "not enrolled" instead of breaking.
+        try {
+          const enrollmentsRes = await getEnrollments();
+          const enrollments: Enrollment[] = enrollmentsRes.data.data.enrollments ?? [];
+          const matched = enrollments.find((e) => e.course._id === courseId);
+
+          if (matched) {
+            setIsEnrolled(true);
+            setCompletedLessonIds(matched.progress?.completedLessons ?? []);
+          } else {
+            setIsEnrolled(false);
+            setCompletedLessonIds([]);
+          }
+        } catch {
+          setIsEnrolled(false);
+          setCompletedLessonIds([]);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load course";
@@ -215,7 +246,7 @@ export default function CourseDetailPage() {
   const totalLessons    = course?.modules.reduce((a, m) => a + m.lessons.length, 0) ?? 0;
   const progressPercent = totalLessons > 0
     ? Math.round((completedLessonIds.length / totalLessons) * 100)
-    : 68; // default 68 to match the design screenshot
+    : 0;
   const modCount        = course?.modules.length ?? 0;
   const avgMin          = course ? avgLessonMinutes(course.modules) : 0;
 
@@ -242,6 +273,25 @@ export default function CourseDetailPage() {
     );
     const target = inProgress ?? course.modules[0];
     handleContinue(target._id);
+  }
+
+  // ── Enroll directly from this page via the real backend ──
+  async function handleEnrollClick() {
+    if (!courseId) return;
+    try {
+      setEnrolling(true);
+      setEnrollError("");
+
+      await enrollInCourse(courseId);
+
+      setIsEnrolled(true);
+      setCompletedLessonIds([]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to enroll in course";
+      setEnrollError(message);
+    } finally {
+      setEnrolling(false);
+    }
   }
 
   // ── Build module rows outside JSX (Rule 10) ──
@@ -422,16 +472,42 @@ export default function CourseDetailPage() {
               <p className="text-[12px] text-[#8A97B8]">
                 This course is on your roadmap
               </p>
+
+              {/* Only shown once the course is fully complete */}
+              {progressPercent === 100 && (
+                <button
+                  onClick={() => router.push("/courses")}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[14px] font-semibold hover:bg-[#E8EDFF] transition-colors"
+                >
+                  Browse more courses
+                  <ChevronRight size={15} />
+                </button>
+              )}
             </div>
           ) : (
             /* Not enrolled */
             <div className="flex flex-col gap-3">
               <p className="text-[13px] text-[#3D4A6B]">
-                Add this course to your roadmap to track your progress.
+                Enroll to track your progress through this course.
               </p>
+
+              {/* Enroll now — calls the real backend directly from this page */}
+              <button
+                onClick={handleEnrollClick}
+                disabled={enrolling}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1A3ADB] text-white text-[14px] font-semibold hover:bg-[#1228B0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Check size={15} />
+                {enrolling ? "Enrolling..." : "Enroll now"}
+              </button>
+
+              {enrollError && (
+                <p className="text-[12px] text-[#EF4444]">{enrollError}</p>
+              )}
+
               <button
                 onClick={() => router.push("/roadmap")}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#1A3ADB] text-white text-[14px] font-semibold hover:bg-[#1228B0] transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[14px] font-semibold hover:bg-[#E8EDFF] transition-colors"
               >
                 <Map size={15} />
                 View my roadmap

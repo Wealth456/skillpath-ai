@@ -61,3 +61,16 @@ export async function generateRoadmap() {
   );
   return response;
 }
+
+// ─── GET EXISTING ROADMAP ──────────────────────────────────────────────────
+// Fetches a previously-generated roadmap for a given user.
+// Returns 404 if the user has no roadmap yet — callers should catch that
+// and treat it as "no roadmap", not as a hard error.
+//
+// Usage:
+//   const response = await getRoadmap(userId);
+//   const roadmap = response.data.data.roadmap;
+export async function getRoadmap(userId: string) {
+  const response = await api.get<GenerateRoadmapResponse>(`/api/roadmap/${userId}`);
+  return response;
+}

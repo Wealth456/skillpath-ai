@@ -57,6 +57,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setUserInitials(initials);
   }, []);
 
+  // ── ONBOARDING GUARD ──────────────────────────────────────────────────────
+  // Prevents anyone from reaching /dashboard, /roadmap, /courses, etc. by
+  // typing the URL directly if they haven't completed onboarding yet.
+  // Mirrors the same check already done in login/page.tsx after sign-in.
+  useEffect(() => {
+    const token = localStorage.getItem("skillpath_token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const rawPreferences = localStorage.getItem("skillpath_preferences");
+    const preferences = rawPreferences ? JSON.parse(rawPreferences) : null;
+
+    if (!preferences?.goal || preferences.goal === "") {
+      router.push("/onboarding/goal");
+    }
+  }, [router]);
+
   // Every time the route changes, read the page title from sessionStorage.
   // Pages set "skillpath_page_title" and "skillpath_page_subtitle" in their
   // own useEffect. We fall back to getDefaultMeta while the page loads.

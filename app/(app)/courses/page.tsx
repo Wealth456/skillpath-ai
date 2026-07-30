@@ -14,8 +14,8 @@ import {
   ChevronRight,
   Check,
 } from "lucide-react";
-import { getCourses } from "@/lib/api/learning";
-import type { Course } from "@/lib/api/learning";
+import { getCourses, getEnrollments, enrollInCourse } from "@/lib/api/learning";
+import type { Course, Enrollment } from "@/lib/api/learning";
 
 // ─────────────────────────────────────────────────────────────
 // STATIC MOCK CARDS — shown as the bottom row of 3
@@ -78,10 +78,6 @@ const MOCK_COURSES: MockCourse[] = [
 
 const FILTER_TABS = ["All", "Web Dev", "Data Science", "UI/UX", "Python", "Cloud", "Mobile"];
 
-// localStorage key prefix for manually enrolled courses
-// Stores an array of course IDs the user explicitly enrolled in
-const ENROLLED_KEY = "skillpath_enrolled_courses";
-
 // ─────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────
@@ -110,17 +106,6 @@ function getCourseIcon(category: string | undefined | null): { icon: React.React
 function formatLevel(level: string | undefined | null): string {
   if (!level) return "";
   return level.charAt(0).toUpperCase() + level.slice(1);
-}
-
-// Read the manually-enrolled course IDs from localStorage
-function readEnrolledIds(): string[] {
-  const raw = localStorage.getItem(ENROLLED_KEY);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -157,12 +142,13 @@ function StarRating({ rating }: { rating: number }) {
 interface RealCardProps {
   course: Course;
   enrolled: boolean;
+  enrolling: boolean;
   progressPercent: number;
   onView: (id: string) => void;
   onEnroll: (id: string) => void;
 }
 
-function RealCourseCard({ course, enrolled, progressPercent, onView, onEnroll }: RealCardProps) {
+function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, onEnroll }: RealCardProps) {
   const { icon, bg } = getCourseIcon(course.category);
   const displayRating = 4.8;
   const displayStudents = enrolled ? "23k" : "12k";
@@ -199,7 +185,7 @@ function RealCourseCard({ course, enrolled, progressPercent, onView, onEnroll }:
           <span className="text-[12px] text-[#8A97B8]">({displayStudents} students)</span>
         </div>
 
-        {/* Progress bar — enrolled cards only, now reflects real completed lessons */}
+        {/* Progress bar — enrolled cards only, now reflects real backend progress */}
         {enrolled && (
           <div className="flex flex-col gap-1 mt-2">
             <div className="w-full h-1.5 bg-[#E5E9F5] rounded-full overflow-hidden">
@@ -234,10 +220,11 @@ function RealCourseCard({ course, enrolled, progressPercent, onView, onEnroll }:
             </button>
             <button
               onClick={() => onEnroll(course._id)}
-              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1A3ADB] text-white hover:bg-[#1228B0] transition-colors duration-150"
+              disabled={enrolling}
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1A3ADB] text-white hover:bg-[#1228B0] transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Check size={14} />
-              Enroll now
+              {enrolling ? "Enrolling..." : "Enroll now"}
             </button>
           </div>
         )}
@@ -308,49 +295,58 @@ export default function CoursesPage() {
   const [error, setError] = useState("");
   const [hasRoadmap, setHasRoadmap] = useState(false);
 
-  // Manually enrolled course IDs — separate from the roadmap-based
-  // "enrolled in everything" workaround. This lets a user enroll
+  // Manually enrolled course IDs — now sourced from GET /api/learning/enrollments
+  // instead of localStorage. Kept separate from the roadmap-based
+  // "enrolled in everything" workaround, so a user can enroll
   // in a SPECIFIC course on top of having a roadmap.
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
 
-  // Real progress per course — calculated from localStorage
-  // completed lesson IDs saved by the lesson page
+  // Real progress per course — now comes from the `progressPercent`
+  // field on each enrollment returned by the backend.
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
 
-  // ── Fetch all courses on mount ──
+  // Tracks which course is currently being enrolled in, so we can
+  // disable just that one "Enroll now" button and show a spinner state.
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
+
+  // Separate error state for enroll failures, so a failed enroll
+  // doesn't wipe the whole course catalogue off the screen.
+  const [enrollError, setEnrollError] = useState("");
+
+  // ── Fetch all courses + enrollments on mount ──
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const response = await getCourses();
-        const list: Course[] = response.data.data.courses ?? [];
+        setError("");
+
+        const coursesRes = await getCourses();
+        const list: Course[] = coursesRes.data.data.courses ?? [];
         setCourses(list);
         setFiltered(list);
 
         const raw = localStorage.getItem("skillpath_roadmap");
         setHasRoadmap(!!raw);
 
-        // Read manually-enrolled course IDs
-        setEnrolledIds(readEnrolledIds());
+        // Enrollment data is fetched separately and non-fatally:
+        // if this call fails, the catalogue still renders — the
+        // user just sees everything as "not enrolled" until it succeeds.
+        try {
+          const enrollmentsRes = await getEnrollments();
+          const enrollments: Enrollment[] = enrollmentsRes.data.data.enrollments ?? [];
 
-        // Calculate real progress per course from saved completed lessons
-        const progress: Record<string, number> = {};
-        list.forEach((course) => {
-          const savedCompleted = localStorage.getItem(`skillpath_completed_${course._id}`);
-          if (savedCompleted) {
-            try {
-              const completedIds: string[] = JSON.parse(savedCompleted);
-              const total = course.totalLessons || 1;
-              progress[course._id] = Math.round((completedIds.length / total) * 100);
-            } catch {
-              progress[course._id] = 0;
-            }
-          } else {
-            progress[course._id] = 0;
-          }
-        });
-        setProgressMap(progress);
+          const ids = enrollments.map((enrollment) => enrollment.course._id);
+          setEnrolledIds(ids);
 
+          const progress: Record<string, number> = {};
+          enrollments.forEach((enrollment) => {
+            progress[enrollment.course._id] = enrollment.progress?.progressPercent ?? 0;
+          });
+          setProgressMap(progress);
+        } catch {
+          setEnrolledIds([]);
+          setProgressMap({});
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load courses";
         setError(message);
@@ -389,16 +385,26 @@ export default function CoursesPage() {
     router.push(`/courses/${id}`);
   }
 
-  // ── Enroll instantly — frontend-only, no backend call ──
-  function handleEnroll(id: string) {
-    const updated = [...enrolledIds, id];
-    setEnrolledIds(updated);
-    localStorage.setItem(ENROLLED_KEY, JSON.stringify(updated));
+  // ── Enroll via the real backend, then update local state from the response ──
+  async function handleEnroll(id: string) {
+    try {
+      setEnrollingId(id);
+      setEnrollError("");
+
+      const response = await enrollInCourse(id);
+     setEnrolledIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setProgressMap((prev) => ({ ...prev, [id]: 0 }));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to enroll in course";
+      setEnrollError(message);
+    } finally {
+      setEnrollingId(null);
+    }
   }
 
   // A course counts as "enrolled" if either:
   // - the user has a roadmap (treated as enrolled in everything), OR
-  // - the user manually clicked "Enroll now" on that specific course
+  // - the backend has an enrollment record for that specific course
   function isEnrolled(courseId: string): boolean {
     return hasRoadmap || enrolledIds.includes(courseId);
   }
@@ -427,6 +433,7 @@ export default function CoursesPage() {
       key={course._id}
       course={course}
       enrolled={true}
+      enrolling={enrollingId === course._id}
       progressPercent={progressMap[course._id] ?? 0}
       onView={handleView}
       onEnroll={handleEnroll}
@@ -439,6 +446,7 @@ export default function CoursesPage() {
       key={course._id}
       course={course}
       enrolled={false}
+      enrolling={enrollingId === course._id}
       progressPercent={0}
       onView={handleView}
       onEnroll={handleEnroll}
@@ -478,6 +486,13 @@ export default function CoursesPage() {
       {!loading && error && (
         <div className="rounded-xl bg-[#FEE2E2] border border-[#EF4444]/20 px-5 py-4 text-sm text-[#EF4444]">
           {error}
+        </div>
+      )}
+
+      {/* ── ENROLL ERROR ── */}
+      {!loading && !error && enrollError && (
+        <div className="rounded-xl bg-[#FEE2E2] border border-[#EF4444]/20 px-5 py-4 text-sm text-[#EF4444]">
+          {enrollError}
         </div>
       )}
 

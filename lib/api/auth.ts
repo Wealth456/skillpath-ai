@@ -63,25 +63,28 @@ export async function register(payload: RegisterPayload) {
 export async function login(payload: LoginPayload) {
   const response = await api.post<AuthResponse>("/api/auth/login", payload);
 
-  const data = response.data as unknown as Record<string, unknown>;
+  const data  = response.data as unknown as Record<string, unknown>;
   const inner = data?.data as Record<string, unknown> | undefined;
 
+  // Clear any roadmap left over from a PREVIOUS user's session in this
+  // browser. skillpath_roadmap is not scoped per-user, so without this,
+  // logging in as a different account can display someone else's roadmap
+  // before the fresh one is fetched/generated.
+  localStorage.removeItem("skillpath_roadmap");
+
   const token = inner?.token as string | undefined;
-  if (token) {
-    localStorage.setItem("skillpath_token", token);
-  }
+  if (token) { localStorage.setItem("skillpath_token", token); }
 
   const user = inner?.user as Record<string, unknown> | undefined;
 
   const name = user?.name as string | undefined;
-  if (name) {
-    localStorage.setItem("skillpath_name", name);
-  }
+  if (name) { localStorage.setItem("skillpath_name", name); }
+
+  const userId = user?._id as string | undefined;
+  if (userId) { localStorage.setItem("skillpath_user_id", userId); }
 
   const preferences = user?.preferences as Record<string, unknown> | undefined;
-  if (preferences) {
-    localStorage.setItem("skillpath_preferences", JSON.stringify(preferences));
-  }
+  if (preferences) { localStorage.setItem("skillpath_preferences", JSON.stringify(preferences)); }
 
   return response;
 }
