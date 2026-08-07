@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getCourse, getEnrollments, enrollInCourse } from "@/lib/api/learning";
 import type { Course, CourseModule, Enrollment } from "@/lib/api/learning";
+import PageNav from "@/components/PageNav";
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -334,12 +335,15 @@ export default function CourseDetailPage() {
   // RENDER
   // ─────────────────────────────────────────────────────────────
   return (
+    
     <div className="flex gap-7 bg-[#F7F8FC] min-h-screen">
+      
 
       {/* ══════════════════════════════════════════
           LEFT COLUMN  (course hero + modules list)
       ══════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col gap-6 min-w-0">
+        <PageNav />
 
         {/* ── HERO BANNER ── */}
         <div className="rounded-2xl px-8 py-7" style={{ backgroundColor: "#0D1B4B" }}>

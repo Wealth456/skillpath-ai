@@ -7,6 +7,7 @@ import { getQuizAttempts } from "@/lib/api/quiz";
 import type { QuizResult, QuizAttempt } from "@/lib/api/quiz";
 import { getCourse } from "@/lib/api/learning";
 import type { Course, Lesson } from "@/lib/api/learning";
+import PageNav from "@/components/PageNav";
 
 export default function QuizResultsPage() {
   const params       = useParams();
@@ -189,6 +190,7 @@ export default function QuizResultsPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FC]">
+      <PageNav />
 
       {/* Top navbar */}
       <nav

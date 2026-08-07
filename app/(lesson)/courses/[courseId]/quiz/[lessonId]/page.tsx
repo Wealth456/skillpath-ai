@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { generateQuiz, getQuizForLesson, submitQuiz } from "@/lib/api/quiz";
 import type { Quiz } from "@/lib/api/quiz";
+import PageNav from "@/components/PageNav";
 
 // ─────────────────────────────────────────────────────────────
 // TIMER HOOK
@@ -219,6 +220,7 @@ export default function QuizPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F8FC]">
+      <PageNav />
 
       {/* Top navbar */}
       <nav

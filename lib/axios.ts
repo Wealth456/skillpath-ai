@@ -11,10 +11,10 @@ import axios from "axios";
 // axios.create() lets us set defaults that apply to every request made
 // through this instance. Think of it as a pre-configured fetch.
 const api = axios.create({
-  baseURL: "https://skillpath-backend-7bkn.onrender.com",
+  baseURL: "https://skillpath-backend.symplax.app",
   // baseURL: every request will be prefixed with this.
-  // So api.get("/api/learning/") becomes a request to:
-  // https://skillpath-backend-7bkn.onrender.com/api/learning/
+  
+  // https://skillpath-backend.symplax.app/api/docs/
 
   headers: {
     "Content-Type": "application/json",

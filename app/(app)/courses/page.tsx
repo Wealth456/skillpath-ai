@@ -16,11 +16,10 @@ import {
 } from "lucide-react";
 import { getCourses, getEnrollments, enrollInCourse } from "@/lib/api/learning";
 import type { Course, Enrollment } from "@/lib/api/learning";
+import PageNav from "@/components/PageNav";
 
 // ─────────────────────────────────────────────────────────────
-// STATIC MOCK CARDS — shown as the bottom row of 3
-// The backend only seeds 3 courses; the design shows 6 total.
-// These fill the second row with realistic-looking data.
+// STATIC MOCK CARDS
 // ─────────────────────────────────────────────────────────────
 
 interface MockCourse {
@@ -32,10 +31,9 @@ interface MockCourse {
   category: string;
   rating: number;
   students: string;
-  headerBg: string; // coloured top band unique to each mock card
+  headerBg: string;
 }
 
-// Written out individually — Rule 10 (no .map in JSX)
 const MOCK_COURSES: MockCourse[] = [
   {
     _id: "mock-1",
@@ -77,6 +75,23 @@ const MOCK_COURSES: MockCourse[] = [
 // ─────────────────────────────────────────────────────────────
 
 const FILTER_TABS = ["All", "Web Dev", "Data Science", "UI/UX", "Python", "Cloud", "Mobile"];
+
+// ─────────────────────────────────────────────────────────────
+// ROADMAP TYPES
+// ─────────────────────────────────────────────────────────────
+
+interface RoadmapTopic {
+  name: string;
+}
+
+interface RoadmapStage {
+  title: string;
+  topics: RoadmapTopic[];
+}
+
+interface Roadmap {
+  stages: RoadmapStage[];
+}
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS
@@ -136,38 +151,51 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// REAL COURSE CARD (from API)
+// REAL COURSE CARD
 // ─────────────────────────────────────────────────────────────
 
 interface RealCardProps {
   course: Course;
   enrolled: boolean;
+  roadmapMatch: boolean;
   enrolling: boolean;
   progressPercent: number;
   onView: (id: string) => void;
   onEnroll: (id: string) => void;
+  onStartRoadmapCourse: (id: string) => void;
 }
 
-function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, onEnroll }: RealCardProps) {
+function RealCourseCard({
+  course,
+  enrolled,
+  roadmapMatch,
+  enrolling,
+  progressPercent,
+  onView,
+  onEnroll,
+  onStartRoadmapCourse,
+}: RealCardProps) {
   const { icon, bg } = getCourseIcon(course.category);
   const displayRating = 4.8;
   const displayStudents = enrolled ? "23k" : "12k";
 
   return (
     <div className="bg-white rounded-2xl border border-[#E4E8F5] overflow-hidden flex flex-col">
-      {/* Coloured top band with icon + enrolled badge */}
       <div className="bg-[#F0F3FF] px-5 pt-5 pb-4 flex items-start justify-between">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: bg }}>
           {icon}
         </div>
-        {enrolled && (
+        {enrolled ? (
           <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#1A3ADB] text-white">
             Enrolled
           </span>
-        )}
+        ) : roadmapMatch ? (
+          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-[#E8EDFF] text-[#1A3ADB] border border-[#1A3ADB]/20">
+            Roadmap generated
+          </span>
+        ) : null}
       </div>
 
-      {/* Card body */}
       <div className="px-5 pb-5 flex flex-col gap-2 flex-1">
         <h3 className="font-bold text-[#0D1220] text-[15px] leading-snug mt-3">
           {course.title ?? "Untitled course"}
@@ -185,7 +213,6 @@ function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, 
           <span className="text-[12px] text-[#8A97B8]">({displayStudents} students)</span>
         </div>
 
-        {/* Progress bar — enrolled cards only, now reflects real backend progress */}
         {enrolled && (
           <div className="flex flex-col gap-1 mt-2">
             <div className="w-full h-1.5 bg-[#E5E9F5] rounded-full overflow-hidden">
@@ -200,7 +227,6 @@ function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, 
 
         <div className="flex-1" />
 
-        {/* Two buttons when not enrolled: View course + Enroll */}
         {enrolled ? (
           <button
             onClick={() => onView(course._id)}
@@ -208,6 +234,15 @@ function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, 
           >
             <PlayCircle size={14} />
             Continue
+          </button>
+        ) : roadmapMatch ? (
+          <button
+            onClick={() => onStartRoadmapCourse(course._id)}
+            disabled={enrolling}
+            className="mt-3 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-semibold bg-[#1A3ADB] text-white hover:bg-[#1228B0] transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <PlayCircle size={14} />
+            {enrolling ? "Starting..." : "Start Learning"}
           </button>
         ) : (
           <div className="flex flex-col gap-2 mt-3">
@@ -234,26 +269,28 @@ function RealCourseCard({ course, enrolled, enrolling, progressPercent, onView, 
 }
 
 // ─────────────────────────────────────────────────────────────
-// MOCK COURSE CARD (static bottom row)
+// MOCK COURSE CARD
 // ─────────────────────────────────────────────────────────────
 
 interface MockCardProps {
   course: MockCourse;
-  onView: (id: string) => void;
 }
 
-function MockCourseCard({ course, onView }: MockCardProps) {
+function MockCourseCard({ course }: MockCardProps) {
   const { icon } = getCourseIcon(course.category);
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E4E8F5] overflow-hidden flex flex-col">
-      <div className="px-5 pt-5 pb-4 flex items-start" style={{ backgroundColor: course.headerBg }}>
+    <div className="bg-white rounded-2xl border border-[#E4E8F5] overflow-hidden flex flex-col opacity-90">
+      <div className="px-5 pt-5 pb-4 flex items-start justify-between" style={{ backgroundColor: course.headerBg }}>
         <div
           className="w-9 h-9 rounded-xl flex items-center justify-center"
           style={{ backgroundColor: "#fff", opacity: 0.9 }}
         >
           {icon}
         </div>
+        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white text-[#8A97B8] border border-[#E4E8F5]">
+          Coming soon
+        </span>
       </div>
 
       <div className="px-5 pb-5 flex flex-col gap-2 flex-1">
@@ -270,14 +307,35 @@ function MockCourseCard({ course, onView }: MockCardProps) {
         <div className="flex-1" />
 
         <button
-          onClick={() => onView(course._id)}
-          className="mt-3 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-semibold border border-[#E4E8F5] text-[#3D4A6B] hover:bg-[#E8EDFF] transition-colors duration-150"
+          disabled
+          className="mt-3 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-sm font-semibold border border-[#E4E8F5] text-[#8A97B8] cursor-not-allowed"
         >
-          View course
-          <ChevronRight size={14} />
+          Coming soon
         </button>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// KEYWORD MATCHING
+// ─────────────────────────────────────────────────────────────
+
+const STOPWORDS = new Set([
+  "the", "a", "an", "of", "to", "and", "for", "in", "on", "with",
+  "your", "you", "beginner", "intermediate", "advanced", "introduction",
+  "fundamentals", "basics", "guide", "learn", "learning", "mastery",
+  "from", "job", "ready",
+]);
+
+function extractKeywords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s/]/g, " ")
+      .split(/\s+/)
+      .flatMap((word) => word.split("/"))
+      .filter((word) => word.length > 2 && !STOPWORDS.has(word))
   );
 }
 
@@ -293,27 +351,27 @@ export default function CoursesPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hasRoadmap, setHasRoadmap] = useState(false);
 
-  // Manually enrolled course IDs — now sourced from GET /api/learning/enrollments
-  // instead of localStorage. Kept separate from the roadmap-based
-  // "enrolled in everything" workaround, so a user can enroll
-  // in a SPECIFIC course on top of having a roadmap.
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
-
-  // Real progress per course — now comes from the `progressPercent`
-  // field on each enrollment returned by the backend.
+  const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
-
-  // Tracks which course is currently being enrolled in, so we can
-  // disable just that one "Enroll now" button and show a spinner state.
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
-
-  // Separate error state for enroll failures, so a failed enroll
-  // doesn't wipe the whole course catalogue off the screen.
   const [enrollError, setEnrollError] = useState("");
 
-  // ── Fetch all courses + enrollments on mount ──
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem("skillpath_search_query");
+    if (saved) setSearchQuery(saved);
+
+    function handleSearchUpdate(e: Event) {
+      const custom = e as CustomEvent<{ query: string }>;
+      setSearchQuery(custom.detail.query);
+    }
+    window.addEventListener("skillpath-search-update", handleSearchUpdate);
+    return () => window.removeEventListener("skillpath-search-update", handleSearchUpdate);
+  }, []);
+
   useEffect(() => {
     async function load() {
       try {
@@ -325,12 +383,15 @@ export default function CoursesPage() {
         setCourses(list);
         setFiltered(list);
 
-        const raw = localStorage.getItem("skillpath_roadmap");
-        setHasRoadmap(!!raw);
+        const savedRoadmap = localStorage.getItem("skillpath_roadmap");
+        if (savedRoadmap) {
+          try {
+            setRoadmap(JSON.parse(savedRoadmap));
+          } catch {
+            // ignore malformed cache
+          }
+        }
 
-        // Enrollment data is fetched separately and non-fatally:
-        // if this call fails, the catalogue still renders — the
-        // user just sees everything as "not enrolled" until it succeeds.
         try {
           const enrollmentsRes = await getEnrollments();
           const enrollments: Enrollment[] = enrollmentsRes.data.data.enrollments ?? [];
@@ -357,42 +418,48 @@ export default function CoursesPage() {
     load();
   }, []);
 
-  // ── Re-filter when tab changes ──
+  // ── Re-filter when tab OR search query changes ──
   useEffect(() => {
-    if (activeTab === "All") {
-      setFiltered(courses);
-      return;
+    let result = courses;
+
+    if (activeTab !== "All") {
+      const tab = activeTab.toLowerCase();
+      result = result.filter((c) => {
+        const cat = (c.category ?? "").toLowerCase();
+        if (tab === "web dev") return cat.includes("web") || cat.includes("javascript");
+        if (tab === "data science") return cat.includes("data") || cat.includes("science");
+        if (tab === "ui/ux") return cat.includes("ui") || cat.includes("ux") || cat.includes("design");
+        if (tab === "python") return cat.includes("python");
+        if (tab === "cloud") return cat.includes("cloud") || cat.includes("aws");
+        if (tab === "mobile") return cat.includes("mobile");
+        return true;
+      });
     }
 
-    const tab = activeTab.toLowerCase();
-
-    const result = courses.filter((c) => {
-      const cat = (c.category ?? "").toLowerCase();
-      if (tab === "web dev") return cat.includes("web") || cat.includes("javascript");
-      if (tab === "data science") return cat.includes("data") || cat.includes("science");
-      if (tab === "ui/ux") return cat.includes("ui") || cat.includes("ux") || cat.includes("design");
-      if (tab === "python") return cat.includes("python");
-      if (tab === "cloud") return cat.includes("cloud") || cat.includes("aws");
-      if (tab === "mobile") return cat.includes("mobile");
-      return true;
-    });
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (c) =>
+          (c.title ?? "").toLowerCase().includes(q) ||
+          (c.category ?? "").toLowerCase().includes(q) ||
+          (c.instructor ?? "").toLowerCase().includes(q)
+      );
+    }
 
     setFiltered(result);
-  }, [activeTab, courses]);
+  }, [activeTab, searchQuery, courses]);
 
   function handleView(id: string) {
-    if (id.startsWith("mock-")) return;
     router.push(`/courses/${id}`);
   }
 
-  // ── Enroll via the real backend, then update local state from the response ──
   async function handleEnroll(id: string) {
     try {
       setEnrollingId(id);
       setEnrollError("");
 
-      const response = await enrollInCourse(id);
-     setEnrolledIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      await enrollInCourse(id);
+      setEnrolledIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       setProgressMap((prev) => ({ ...prev, [id]: 0 }));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to enroll in course";
@@ -402,17 +469,53 @@ export default function CoursesPage() {
     }
   }
 
-  // A course counts as "enrolled" if either:
-  // - the user has a roadmap (treated as enrolled in everything), OR
-  // - the backend has an enrollment record for that specific course
-  function isEnrolled(courseId: string): boolean {
-    return hasRoadmap || enrolledIds.includes(courseId);
+  // Roadmap-generated course — auto-enroll (if needed) then go straight
+  // into the course. No separate manual enroll step for a course the
+  // system already recommended.
+  async function handleStartRoadmapCourse(id: string) {
+    try {
+      setEnrollingId(id);
+      setEnrollError("");
+      await enrollInCourse(id);
+      setEnrolledIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setProgressMap((prev) => ({ ...prev, [id]: 0 }));
+    } catch {
+      // Already enrolled or a transient error — still proceed to the course.
+    } finally {
+      setEnrollingId(null);
+      router.push(`/courses/${id}`);
+    }
   }
 
-  const recommended = filtered.filter((c) => isEnrolled(c._id));
-  const notEnrolled  = filtered.filter((c) => !isEnrolled(c._id));
+  function isEnrolled(courseId: string): boolean {
+    return enrolledIds.includes(courseId);
+  }
 
-  // ── Build tab button elements (Rule 10 — no .map in JSX) ──
+  function isRoadmapMatch(course: Course): boolean {
+    if (!roadmap) return false;
+
+    const courseKeywords = new Set([
+      ...extractKeywords(course.category ?? ""),
+      ...extractKeywords(course.title ?? ""),
+      ...(course.modules ?? []).flatMap((m) => Array.from(extractKeywords(m.title ?? ""))),
+    ]);
+
+    return roadmap.stages.some((stage) => {
+      const stageKeywords = new Set([
+        ...extractKeywords(stage.title),
+        ...stage.topics.flatMap((t) => Array.from(extractKeywords(t.name))),
+      ]);
+
+      let sharedCount = 0;
+      for (const word of stageKeywords) {
+        if (courseKeywords.has(word)) sharedCount++;
+      }
+      return sharedCount >= 2;
+    });
+  }
+
+  const continueLearning = filtered.filter((c) => isEnrolled(c._id));
+
   const tabButtons = FILTER_TABS.map((tab) => (
     <button
       key={tab}
@@ -427,43 +530,43 @@ export default function CoursesPage() {
     </button>
   ));
 
-  // ── Build recommended card elements ──
-  const recommendedCards = recommended.map((course) => (
+  const continueLearningCards = continueLearning.map((course) => (
     <RealCourseCard
       key={course._id}
       course={course}
       enrolled={true}
+      roadmapMatch={isRoadmapMatch(course)}
       enrolling={enrollingId === course._id}
       progressPercent={progressMap[course._id] ?? 0}
       onView={handleView}
       onEnroll={handleEnroll}
+      onStartRoadmapCourse={handleStartRoadmapCourse}
     />
   ));
 
-  // ── Build not-enrolled real course card elements ──
-  const notEnrolledCards = notEnrolled.map((course) => (
+  const allCoursesCards = filtered.map((course) => (
     <RealCourseCard
       key={course._id}
       course={course}
-      enrolled={false}
+      enrolled={isEnrolled(course._id)}
+      roadmapMatch={isRoadmapMatch(course)}
       enrolling={enrollingId === course._id}
-      progressPercent={0}
+      progressPercent={progressMap[course._id] ?? 0}
       onView={handleView}
       onEnroll={handleEnroll}
+      onStartRoadmapCourse={handleStartRoadmapCourse}
     />
   ));
 
-  // ── Build mock card elements ──
-  const mockCards = MOCK_COURSES.map((course) => (
-    <MockCourseCard key={course._id} course={course} onView={handleView} />
-  ));
-
-  // ─────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────
+  const mockCards = searchQuery.trim()
+    ? []
+    : MOCK_COURSES.map((course) => (
+        <MockCourseCard key={course._id} course={course} />
+      ));
 
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen bg-[#F7F8FC]">
+      <PageNav />
 
       {/* ── FILTER TABS ROW ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -496,26 +599,49 @@ export default function CoursesPage() {
         </div>
       )}
 
-      {/* ── RECOMMENDED FOR YOU ── */}
       {!loading && !error && (
-        <section className="flex flex-col gap-4">
-          <div>
-            <h2 className="text-base font-bold text-[#0D1220]">Recommended for you</h2>
-            <p className="text-xs text-[#8A97B8] mt-0.5">
-              Based on your AI-generated roadmap
-            </p>
-          </div>
+        <>
+          {/* ── CONTINUE LEARNING ── */}
+          {continueLearning.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-base font-bold text-[#0D1220]">Continue Learning</h2>
+                <p className="text-xs text-[#8A97B8] mt-0.5">
+                  Courses you&apos;re currently enrolled in
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {continueLearningCards}
+              </div>
+            </section>
+          )}
 
-          {/* Row 1 — enrolled real courses (or not-enrolled if none yet) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {recommendedCards.length > 0 ? recommendedCards : notEnrolledCards}
-          </div>
-
-          {/* Row 2 — mock courses to fill the second row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {mockCards}
-          </div>
-        </section>
+          {/* ── ALL COURSES ── */}
+          <section className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-base font-bold text-[#0D1220]">
+                {searchQuery.trim() ? `Results for "${searchQuery.trim()}"` : "All Courses"}
+              </h2>
+              <p className="text-xs text-[#8A97B8] mt-0.5">
+                {searchQuery.trim()
+                  ? `${allCoursesCards.length} course${allCoursesCards.length === 1 ? "" : "s"} found`
+                  : "Every course available on SkillPath AI"}
+              </p>
+            </div>
+            {allCoursesCards.length > 0 || mockCards.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {allCoursesCards}
+                {mockCards}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-sm text-[#8A97B8]">
+                  No courses match &quot;{searchQuery.trim()}&quot;. Try a different search term.
+                </p>
+              </div>
+            )}
+          </section>
+        </>
       )}
     </div>
   );

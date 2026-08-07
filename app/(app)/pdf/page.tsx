@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { uploadDocument, getDocuments, getDocumentSummary } from "@/lib/api/document";
 import type { UploadedDocument } from "@/lib/api/document";
-
+import PageNav from "@/components/PageNav";
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
@@ -292,6 +292,29 @@ export default function PDFPage() {
     });
   }
 
+  function handleDownload() {
+    if (!activeDocument) return;
+    const text = [
+      `${activeDocument.filename} — AI Summary`,
+      "",
+      `Overview\n${activeDocument.overview}`,
+      "",
+      `Detailed Summary\n${activeDocument.summary}`,
+      "",
+      `Key Points\n${activeDocument.keyPoints.map((k) => `• ${k}`).join("\n")}`,
+    ].join("\n");
+
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${activeDocument.filename.replace(/\.pdf$/i, "")}-summary.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   const sections = buildSections(activeDocument, activeTab);
   const sectionBlocks = sections.map((section, i) => (
     <SummaryBlock key={i} section={section} />
@@ -324,8 +347,11 @@ export default function PDFPage() {
 
   return (
     <div className="flex gap-6 min-h-screen bg-[#F7F8FC]">
+      
+      
 
       <div className="flex-1 flex flex-col gap-5 min-w-0">
+        <PageNav />
 
         <div>
           <h2 className="text-[15px] font-bold text-[#0D1220] mb-0.5">Upload PDF</h2>
@@ -514,7 +540,10 @@ export default function PDFPage() {
                 <Copy size={13} />
                 {copied ? "Copied!" : "Copy summary"}
               </button>
-              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[12px] font-semibold hover:bg-[#F7F8FC] transition-colors">
+              <button
+                onClick={handleDownload}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#E4E8F5] text-[#3D4A6B] text-[12px] font-semibold hover:bg-[#F7F8FC] transition-colors"
+              >
                 <Download size={13} />
                 Download
               </button>

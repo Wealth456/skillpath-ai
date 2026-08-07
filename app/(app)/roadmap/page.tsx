@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, ChevronRight, Settings } from "lucide-react";
 import { getRoadmap } from "@/lib/api/roadmap";
+import { getCourses, getEnrollments, enrollInCourse } from "@/lib/api/learning";
+import type { Course, Enrollment } from "@/lib/api/learning";
+import PageNav from "@/components/PageNav";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 interface RoadmapTopic {
@@ -24,18 +27,68 @@ interface Roadmap {
   stages: RoadmapStage[];
 }
 
+// ── KEYWORD MATCHING ─────────────────────────────────────────────────────────
+const STOPWORDS = new Set([
+  "the", "a", "an", "of", "to", "and", "for", "in", "on", "with",
+  "your", "you", "beginner", "intermediate", "advanced", "introduction",
+  "fundamentals", "basics", "guide", "learn", "learning", "mastery",
+  "from", "job", "ready",
+]);
+
+function extractKeywords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s/]/g, " ")
+      .split(/\s+/)
+      .flatMap((word) => word.split("/"))
+      .filter((word) => word.length > 2 && !STOPWORDS.has(word))
+  );
+}
+
+function matchCourseForStage(stage: RoadmapStage, courses: Course[]): Course | null {
+  const stageKeywords = new Set([
+    ...extractKeywords(stage.title),
+    ...stage.topics.flatMap((t) => Array.from(extractKeywords(t.name))),
+  ]);
+
+  let bestMatch: Course | null = null;
+  let bestScore = 0;
+
+  for (const course of courses) {
+    const courseKeywords = new Set([
+      ...extractKeywords(course.category ?? ""),
+      ...extractKeywords(course.title ?? ""),
+      ...(course.modules ?? []).flatMap((m) => Array.from(extractKeywords(m.title ?? ""))),
+    ]);
+
+    let sharedCount = 0;
+    for (const word of stageKeywords) {
+      if (courseKeywords.has(word)) sharedCount++;
+    }
+
+    if (sharedCount >= 2 && sharedCount > bestScore) {
+      bestScore = sharedCount;
+      bestMatch = course;
+    }
+  }
+
+  return bestMatch;
+}
+
 export default function RoadmapPage() {
   const [roadmap, setRoadmap]     = useState<Roadmap | null>(null);
-  // Replace with:
-const [userLevel, setUserLevel] = useState("Beginner");
-const [dailyTime] = useState("30-60 min/day");
+  const [userLevel, setUserLevel] = useState("Beginner");
+  const [dailyTime] = useState("30-60 min/day");
   const router = useRouter();
 
   const [checkedStorage, setCheckedStorage] = useState(false);
 
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+
   useEffect(() => {
     async function loadRoadmap() {
-      // Fast path — roadmap already cached locally
       const saved = localStorage.getItem("skillpath_roadmap");
       if (saved) {
         try {
@@ -47,7 +100,6 @@ const [dailyTime] = useState("30-60 min/day");
         }
       }
 
-      // Fallback — ask the backend if this user already has a roadmap
       const userId = localStorage.getItem("skillpath_user_id");
       if (userId) {
         try {
@@ -58,15 +110,37 @@ const [dailyTime] = useState("30-60 min/day");
             localStorage.setItem("skillpath_roadmap", JSON.stringify(fetched));
           }
         } catch {
-          // 404 (no roadmap) or network error — either way, fall through
-          // to the "no roadmap found" screen below
+          // 404 (no roadmap) or network error — fall through to
+          // "no roadmap found" screen below
         }
       }
 
       setCheckedStorage(true);
     }
 
+    async function loadCoursesAndProgress() {
+      try {
+        const coursesRes = await getCourses();
+        setCourses(coursesRes.data?.data?.courses ?? []);
+      } catch {
+        setCourses([]);
+      }
+
+      try {
+        const enrollRes = await getEnrollments();
+        const enrollments: Enrollment[] = enrollRes.data?.data?.enrollments ?? [];
+        const progress: Record<string, number> = {};
+        enrollments.forEach((e) => {
+          progress[e.course._id] = e.progress?.progressPercent ?? 0;
+        });
+        setProgressMap(progress);
+      } catch {
+        setProgressMap({});
+      }
+    }
+
     loadRoadmap();
+    loadCoursesAndProgress();
 
     const level = localStorage.getItem("sp_level") || "beginner";
     setUserLevel(
@@ -74,6 +148,44 @@ const [dailyTime] = useState("30-60 min/day");
       level === "intermediate" ? "Intermediate" : "Advanced"
     );
   }, [router]);
+
+  // A stage is unlocked if:
+  // - it's the first stage (always unlocked), OR
+  // - the PREVIOUS stage has a matched course AND that course is 100% complete
+  function isStageUnlocked(stageIndex: number): boolean {
+    if (!roadmap) return false;
+    if (stageIndex === 0) return true;
+
+    const prevStage = roadmap.stages[stageIndex - 1];
+    const prevCourse = matchCourseForStage(prevStage, courses);
+    if (!prevCourse) return false;
+
+    return (progressMap[prevCourse._id] ?? 0) === 100;
+  }
+
+  // Clicking a topic on an unlocked stage jumps straight into that
+  // stage's matched course. If the user isn't enrolled yet, silently
+  // enroll them first — a roadmap-generated course shouldn't require a
+  // separate manual "Enroll" step, since the system already picked it.
+  async function handleTopicClick(stage: RoadmapStage, unlocked: boolean) {
+    if (!unlocked) return;
+    const course = matchCourseForStage(stage, courses);
+    if (!course) {
+      router.push("/courses");
+      return;
+    }
+
+    if (progressMap[course._id] === undefined) {
+      try {
+        await enrollInCourse(course._id);
+      } catch {
+        // Already enrolled server-side, or a transient error — either
+        // way, still navigate; the course page reflects real state.
+      }
+    }
+
+    router.push(`/courses/${course._id}`);
+  }
 
   if (!roadmap && checkedStorage) {
     return (
@@ -103,24 +215,36 @@ const [dailyTime] = useState("30-60 min/day");
     );
   }
 
-  // Total topics across all stages
   const totalTopics = roadmap.stages.reduce(
     (acc, s) => acc + s.topics.length, 0
   );
 
-  // Next topic — first topic of first stage
   const nextTopic = roadmap.stages[0]?.topics[0]?.name || "—";
 
-  // Rough days remaining estimate
   const daysRemaining = roadmap.stages
-    .slice(1) // exclude active stage
+    .slice(1)
     .reduce(
       (acc, s) => acc + s.topics.reduce((a, t) => a + t.estimatedDays, 0),
       0
     );
 
+  const matchedProgressValues = roadmap.stages
+    .map((stage) => {
+      const course = matchCourseForStage(stage, courses);
+      return course ? progressMap[course._id] ?? 0 : null;
+    })
+    .filter((v): v is number => v !== null);
+
+  const overallProgress =
+    matchedProgressValues.length > 0
+      ? Math.round(
+          matchedProgressValues.reduce((a, b) => a + b, 0) / matchedProgressValues.length
+        )
+      : 0;
+
   return (
     <div>
+      <PageNav />
       {/* ── PAGE HEADER ── */}
       <div className="flex items-start justify-between mb-2">
         <div>
@@ -132,7 +256,6 @@ const [dailyTime] = useState("30-60 min/day");
           </p>
         </div>
 
-        {/* Edit preferences button */}
         <button
           onClick={() => router.push("/onboarding/goal")}
           className="flex items-center gap-2 bg-white border border-border text-ink text-[13px] font-semibold px-4 py-2 rounded-full hover:bg-grey-100 transition-all"
@@ -144,17 +267,14 @@ const [dailyTime] = useState("30-60 min/day");
 
       {/* ── ROADMAP INFO STRIP ── */}
       <div className="bg-white rounded-2xl border border-border p-4 mb-5 shadow-card-default">
-        {/* Top mini label */}
         <p className="text-[11px] text-ink-faint mb-2">
           roadmap · {roadmap.stages.length} stages · {roadmap.estimatedWeeks} estimated weeks
         </p>
 
-        {/* Roadmap title */}
         <h2 className="text-[22px] font-black text-ink mb-3">
           {roadmap.title}
         </h2>
 
-        {/* Badges row */}
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <span className="bg-primary-light text-primary text-[12px] font-semibold px-3 py-1 rounded-full">
             {userLevel}
@@ -172,12 +292,14 @@ const [dailyTime] = useState("30-60 min/day");
             {totalTopics} topics
           </span>
 
-          {/* Progress */}
           <div className="ml-auto flex items-center gap-2">
             <div className="w-24 h-1.5 bg-grey-200 rounded-full">
-              <div className="w-[25%] h-1.5 bg-primary rounded-full" />
+              <div
+                className="h-1.5 bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${overallProgress}%` }}
+              />
             </div>
-            <span className="text-[12px] font-bold text-primary">25% complete</span>
+            <span className="text-[12px] font-bold text-primary">{overallProgress}% complete</span>
           </div>
         </div>
       </div>
@@ -185,21 +307,20 @@ const [dailyTime] = useState("30-60 min/day");
       {/* ── STAGE COLUMNS ── */}
       <div className="flex gap-4 overflow-x-auto pb-4 mb-5">
         {roadmap.stages.map((stage, stageIndex) => {
-          const isActive = stageIndex === 0;
-          const isLocked = stageIndex > 0;
+          const unlocked = isStageUnlocked(stageIndex);
+          const isActive = unlocked && stageIndex === 0;
+          const matchedCourse = matchCourseForStage(stage, courses);
 
           return (
             <div
               key={stage.stage}
               className={`flex-shrink-0 w-[220px] rounded-2xl border-2 overflow-hidden ${
-                isActive
-                  ? "border-primary"
-                  : "border-border opacity-80"
+                unlocked ? "border-primary" : "border-border opacity-80"
               }`}
             >
               {/* Stage header */}
               <div className={`px-4 py-3 flex items-center justify-between ${
-                isActive ? "bg-primary-light" : "bg-grey-100"
+                unlocked ? "bg-primary-light" : "bg-grey-100"
               }`}>
                 <div>
                   <p className="text-[11px] font-bold text-ink-faint uppercase tracking-wide">
@@ -210,14 +331,14 @@ const [dailyTime] = useState("30-60 min/day");
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  {isActive ? (
+                  {unlocked ? (
                     <span className="text-[10px] bg-primary text-white font-bold px-2 py-0.5 rounded-full">
-                      Active
+                      {isActive ? "Active" : "Unlocked"}
                     </span>
                   ) : (
                     <Lock size={14} className="text-ink-faint" />
                   )}
-                  {isLocked && (
+                  {!unlocked && (
                     <span className="text-[10px] text-ink-faint font-medium">Locked</span>
                   )}
                 </div>
@@ -228,42 +349,43 @@ const [dailyTime] = useState("30-60 min/day");
                 {stage.topics.map((topic, topicIndex) => (
                   <div
                     key={topic._id}
+                    onClick={() => handleTopicClick(stage, unlocked)}
                     className={`rounded-xl p-3 border ${
-                      isActive
+                      unlocked
                         ? "border-border bg-white hover:border-primary hover:bg-primary-xlight transition-colors cursor-pointer"
                         : "border-border bg-grey-100 cursor-not-allowed"
                     }`}
                   >
-                    {/* Topic icon + name */}
                     <div className="flex items-start gap-2 mb-2">
                       <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        isActive ? "bg-primary-light" : "bg-grey-200"
+                        unlocked ? "bg-primary-light" : "bg-grey-200"
                       }`}>
-                        {isLocked ? (
+                        {!unlocked ? (
                           <Lock size={10} className="text-ink-faint" />
                         ) : (
                           <ChevronRight size={10} className="text-primary" />
                         )}
                       </div>
                       <p className={`text-[13px] font-semibold leading-tight ${
-                        isLocked ? "text-ink-muted" : "text-ink"
+                        !unlocked ? "text-ink-muted" : "text-ink"
                       }`}>
                         {topic.name}
                       </p>
                     </div>
 
-                    {/* Days estimate */}
                     <p className={`text-[11px] font-medium ml-7 ${
-                      isLocked ? "text-ink-faint" : "text-ink-muted"
+                      !unlocked ? "text-ink-faint" : "text-ink-muted"
                     }`}>
                       {topic.estimatedDays} days
                     </p>
 
-                    {/* Progress bar — only on active stage first topic */}
-                    {isActive && topicIndex === 0 && (
+                    {isActive && topicIndex === 0 && matchedCourse && (
                       <div className="mt-2 ml-7">
                         <div className="h-1 bg-grey-200 rounded-full">
-                          <div className="h-1 bg-primary rounded-full w-[40%]" />
+                          <div
+                            className="h-1 bg-primary rounded-full transition-all duration-500"
+                            style={{ width: `${progressMap[matchedCourse._id] ?? 0}%` }}
+                          />
                         </div>
                       </div>
                     )}
@@ -279,14 +401,12 @@ const [dailyTime] = useState("30-60 min/day");
       <div className="bg-white rounded-2xl border border-border p-4 shadow-card-default">
         <div className="flex items-center justify-between">
 
-          {/* API badge */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] bg-primary-light text-primary font-bold px-2 py-1 rounded-full">
               API stages[] + topics[]
             </span>
           </div>
 
-          {/* Stats */}
           <div className="flex items-center gap-8">
             <div className="text-center">
               <p className="text-[11px] text-ink-faint mb-0.5">Total weeks</p>

@@ -41,6 +41,14 @@ function LoginForm() {
 
       const d = (res.data as unknown as Record<string, unknown>)?.data as Record<string, unknown>;
       const user = d?.user as Record<string, unknown> | undefined;
+      const role = user?.role as string | undefined;
+
+      // Admins skip onboarding entirely and go straight to the admin panel.
+      if (role === "admin") {
+        router.push("/admin");
+        return;
+      }
+
       const preferences = user?.preferences as Record<string, unknown> | undefined;
 
       if (!preferences?.goal || preferences.goal === "") {
@@ -106,9 +114,9 @@ function LoginForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. amaka@gmail.com"
+                placeholder="e.g. johndoe@gmail.com"
                 required
-                className={`w-full h-11 pl-9 pr-3 border rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all ${
+                className={`w-full h-11 pl-9 pr-3 border rounded-lg text-[14px] text-ink placeholder:text-grey-300 placeholder:font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all ${
                   error ? "border-error ring-2 ring-error-light" : "border-grey-200"
                 }`}
               />
@@ -135,7 +143,7 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
-                className="w-full h-11 pl-9 pr-10 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
+                className="w-full h-11 pl-9 pr-10 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-grey-300 placeholder:font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
               />
               <button
                 type="button"

@@ -11,9 +11,11 @@ import {
   Link as LinkIcon,
   Plus,
   ClipboardList,
+  Lock,
 } from "lucide-react";
 import { getCourse, markLessonComplete, getEnrollments } from "@/lib/api/learning";
 import type { Course, CourseModule, Lesson, Enrollment } from "@/lib/api/learning";
+
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -27,6 +29,11 @@ interface ContentBlock {
 interface ResourceLink {
   label: string;
   href: string;
+}
+
+interface Note {
+  id: string;
+  text: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -229,9 +236,11 @@ export default function LessonPage() {
   const [marking, setMarking]                       = useState(false);
   const [loading, setLoading]                       = useState(true);
   const [error, setError]                           = useState("");
-  const [notes, setNotes]                           = useState<string[]>([]);
+  const [notes, setNotes]                           = useState<Note[]>([]);
   const [noteInput, setNoteInput]                   = useState("");
   const [addingNote, setAddingNote]                 = useState(false);
+  const [editingNoteId, setEditingNoteId]           = useState<string | null>(null);
+  const [editingText, setEditingText]               = useState("");
   const [showQuizPrompt, setShowQuizPrompt]         = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
 
@@ -273,10 +282,6 @@ export default function LessonPage() {
           );
         }
 
-        // ── Completed lessons now come from the real backend ──
-        // Replaces reading `skillpath_completed_${courseId}` from localStorage.
-        // Non-fatal: if this call fails, the page still renders the lesson,
-        // just with completedLessonIds staying empty until it succeeds.
         try {
           const enrollmentsRes = await getEnrollments();
           const enrollments: Enrollment[] = enrollmentsRes.data.data.enrollments ?? [];
@@ -287,7 +292,23 @@ export default function LessonPage() {
         }
 
         const savedNotes = localStorage.getItem(`skillpath_notes_${lessonId}`);
-        if (savedNotes) setNotes(JSON.parse(savedNotes));
+        if (savedNotes) {
+          try {
+            const parsed = JSON.parse(savedNotes);
+            // Backward-compatible: older notes were plain strings before
+            // edit/delete support was added.
+            const normalized: Note[] = Array.isArray(parsed)
+              ? parsed.map((n: unknown) =>
+                  typeof n === "string"
+                    ? { id: crypto.randomUUID(), text: n }
+                    : (n as Note)
+                )
+              : [];
+            setNotes(normalized);
+          } catch {
+            setNotes([]);
+          }
+        }
 
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load lesson";
@@ -300,17 +321,15 @@ export default function LessonPage() {
     load();
   }, [courseId, lessonId]);
 
+  const isCurrentLessonComplete = completedLessonIds.includes(lessonId);
+
   // ── Mark lesson complete, then show the quiz prompt instead of auto-navigating ──
   async function handleMarkComplete() {
     if (!currentLesson || marking) return;
     try {
       setMarking(true);
       const response = await markLessonComplete({ courseId, lessonId });
-
-      // Use the backend's own completedLessons list as the source of truth,
-      // instead of manually appending lessonId and writing it to localStorage.
       setCompletedLessonIds(response.data.data.progress.completedLessons ?? []);
-
       setShowQuizPrompt(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to mark complete";
@@ -325,13 +344,20 @@ export default function LessonPage() {
     router.push(`/courses/${courseId}/quiz/${lessonId}`);
   }
 
+  // Skip just closes the modal — the user stays on this lesson page.
+  // The persistent "Take Quiz" link in the right sidebar (shown once the
+  // lesson is marked complete) is how they come back to it later.
   function handleSkipQuiz() {
     setShowQuizPrompt(false);
-    navigateLesson("next");
   }
 
   function navigateLesson(direction: "prev" | "next") {
     if (!course || !currentLesson) return;
+
+    // Block moving to the next lesson/module until the CURRENT lesson
+    // has been marked complete. "Previous" is always allowed.
+    if (direction === "next" && !isCurrentLessonComplete) return;
+
     const allLessons: Lesson[] = [];
     course.modules.forEach((mod) => mod.lessons.forEach((l) => allLessons.push(l)));
     const idx    = allLessons.findIndex((l) => l._id === lessonId);
@@ -342,11 +368,33 @@ export default function LessonPage() {
 
   function handleAddNote() {
     if (!noteInput.trim()) return;
-    const updated = [...notes, noteInput.trim()];
+    const updated = [...notes, { id: crypto.randomUUID(), text: noteInput.trim() }];
     setNotes(updated);
     localStorage.setItem(`skillpath_notes_${lessonId}`, JSON.stringify(updated));
     setNoteInput("");
     setAddingNote(false);
+  }
+
+  function handleStartEdit(id: string, currentText: string) {
+    setEditingNoteId(id);
+    setEditingText(currentText);
+  }
+
+  function handleSaveEdit() {
+    if (!editingNoteId || !editingText.trim()) return;
+    const updated = notes.map((n) =>
+      n.id === editingNoteId ? { ...n, text: editingText.trim() } : n
+    );
+    setNotes(updated);
+    localStorage.setItem(`skillpath_notes_${lessonId}`, JSON.stringify(updated));
+    setEditingNoteId(null);
+    setEditingText("");
+  }
+
+  function handleDeleteNote(id: string) {
+    const updated = notes.filter((n) => n.id !== id);
+    setNotes(updated);
+    localStorage.setItem(`skillpath_notes_${lessonId}`, JSON.stringify(updated));
   }
 
   function handleSidebarNav(targetLessonId: string) {
@@ -398,16 +446,54 @@ export default function LessonPage() {
     />
   ));
 
-  const noteItems: React.ReactElement[] = notes.map(
-    (note: string, i: number): React.ReactElement => (
-      <p
-        key={i}
-        className="text-[13px] text-[#3D4A6B] py-2 border-b border-[#E4E8F5] last:border-0"
-      >
-        {note}
-      </p>
-    )
-  );
+  const noteItems: React.ReactElement[] = notes.map((note) => (
+    <div key={note.id} className="py-2 border-b border-[#E4E8F5] last:border-0">
+      {editingNoteId === note.id ? (
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={editingText}
+            onChange={(e) => setEditingText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+            className="w-full px-2 py-1.5 border border-[#E4E8F5] rounded-lg text-[13px] text-[#0D1220] focus:outline-none focus:ring-2 focus:ring-[#1A3ADB]/20"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveEdit}
+              className="text-[11px] font-semibold text-[#1A3ADB] hover:underline"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => { setEditingNoteId(null); setEditingText(""); }}
+              className="text-[11px] font-semibold text-[#8A97B8] hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start justify-between gap-2 group">
+          <p className="text-[13px] text-[#3D4A6B] flex-1">{note.text}</p>
+          <div className="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => handleStartEdit(note.id, note.text)}
+              className="text-[11px] font-semibold text-[#1A3ADB] hover:underline"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => handleDeleteNote(note.id)}
+              className="text-[11px] font-semibold text-[#EF4444] hover:underline"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  ));
 
   const resources: ResourceLink[] = [
     { label: cap(course.category) + " Docs",           href: "#" },
@@ -433,7 +519,7 @@ export default function LessonPage() {
 
       {/* ── TOP NAVBAR ── */}
       <nav
-        className="flex items-center justify-between px-6 py-3 sticky top-0 z-50"
+        className="flex items-center justify-between px-6 py-3 sticky top-[62px] z-20"
         style={{ backgroundColor: "#0D1B4B" }}
       >
         <button
@@ -450,16 +536,16 @@ export default function LessonPage() {
 
         <button
           onClick={handleMarkComplete}
-          disabled={marking || completedLessonIds.includes(lessonId)}
+          disabled={marking || isCurrentLessonComplete}
           className={`flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-bold transition-colors ${
-            completedLessonIds.includes(lessonId)
+            isCurrentLessonComplete
               ? "bg-[#10B981] text-white cursor-default"
               : "bg-[#1A3ADB] text-white hover:bg-[#1228B0]"
           }`}
         >
           {marking ? (
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : completedLessonIds.includes(lessonId) ? (
+          ) : isCurrentLessonComplete ? (
             <>
               <Check size={14} /> Completed
             </>
@@ -569,10 +655,10 @@ export default function LessonPage() {
               {completedInModule} of {currentModule.lessons.length} lessons done in Module {moduleIndex}
             </p>
 
-            {/* Persistent quiz access — the modal only ever shows once,
-                right after marking complete, so this is the only way
-                back to the quiz if the user skipped it earlier. */}
-            {completedLessonIds.includes(lessonId) && (
+            {/* Persistent quiz access — shown once this lesson is marked
+                complete, so the user can return to it any time after
+                skipping the initial prompt. */}
+            {isCurrentLessonComplete && (
               <button
                 onClick={() => router.push(`/courses/${courseId}/quiz/${lessonId}`)}
                 className="flex items-center gap-1.5 mt-4 text-[13px] font-semibold text-[#1A3ADB] hover:underline"
@@ -587,7 +673,7 @@ export default function LessonPage() {
       </div>
 
       {/* ── BOTTOM BAR ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#E4E8F5] px-10 py-4 flex items-center justify-between z-40">
+      <div className="sticky bottom-0 bg-white border-t border-[#E4E8F5] px-10 py-4 flex items-center justify-between z-20 mt-auto">
         {prevLesson ? (
           <button
             onClick={() => navigateLesson("prev")}
@@ -603,17 +689,30 @@ export default function LessonPage() {
         {nextLesson ? (
           <button
             onClick={() => navigateLesson("next")}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1A3ADB] text-white text-[13px] font-semibold hover:bg-[#1228B0] transition-colors"
+            disabled={!isCurrentLessonComplete}
+            title={!isCurrentLessonComplete ? "Mark this lesson complete to continue" : undefined}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${
+              isCurrentLessonComplete
+                ? "bg-[#1A3ADB] text-white hover:bg-[#1228B0]"
+                : "bg-[#E5E9F5] text-[#8A97B8] cursor-not-allowed"
+            }`}
           >
+            {!isCurrentLessonComplete && <Lock size={13} />}
             Next: {nextLesson.title}
             <ChevronRight size={14} />
           </button>
         ) : (
           <button
             onClick={() => router.push(`/courses/${courseId}`)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#10B981] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+            disabled={!isCurrentLessonComplete}
+            title={!isCurrentLessonComplete ? "Mark this lesson complete to continue" : undefined}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-colors ${
+              isCurrentLessonComplete
+                ? "bg-[#10B981] text-white hover:opacity-90"
+                : "bg-[#E5E9F5] text-[#8A97B8] cursor-not-allowed"
+            }`}
           >
-            <Check size={14} />
+            {isCurrentLessonComplete ? <Check size={14} /> : <Lock size={13} />}
             Finish Module
           </button>
         )}

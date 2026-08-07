@@ -17,40 +17,54 @@ export default function RegisterPage() {
   const [error, setError]     = useState("");
   const router = useRouter();
 
-  function getPasswordStrength(pw: string): { label: string; color: string; width: string } {
-    if (pw.length === 0) return { label: "", color: "", width: "0%" };
-    if (pw.length < 6)   return { label: "Too short", color: "bg-error", width: "25%" };
-    if (pw.length < 8)   return { label: "Weak", color: "bg-error", width: "40%" };
-    const hasNum    = /\d/.test(pw);
-    const hasLetter = /[a-zA-Z]/.test(pw);
-    if (hasNum && hasLetter && pw.length >= 10) return { label: "Strong", color: "bg-primary", width: "100%" };
-    if (hasNum || hasLetter)                    return { label: "Fair", color: "bg-primary-dark", width: "65%" };
-    return { label: "Weak", color: "bg-error", width: "40%" };
-  }
+  function getPasswordStrength(pw: string): { label: string; color: string; width: string; isStrong: boolean } {
+  if (pw.length === 0) return { label: "", color: "", width: "0%", isStrong: false };
+
+  const hasLetter = /[a-zA-Z]/.test(pw);
+  const hasNumber = /\d/.test(pw);
+  const hasSymbol = /[^a-zA-Z0-9]/.test(pw);
+  const isStrong = hasLetter && hasNumber && hasSymbol && pw.length >= 8;
+
+  if (pw.length < 8) return { label: "Too short — min 8 characters", color: "bg-error", width: "25%", isStrong: false };
+  if (isStrong) return { label: "Strong password", color: "bg-primary", width: "100%", isStrong: true };
+
+  const missing: string[] = [];
+  if (!hasLetter) missing.push("a letter");
+  if (!hasNumber) missing.push("a number");
+  if (!hasSymbol) missing.push("a symbol");
+  return { label: `Add ${missing.join(", ")}`, color: "bg-error", width: "60%", isStrong: false };
+}
 
   const strength = getPasswordStrength(password);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      await register({
-        name: `${firstName.trim()} ${lastName.trim()}`,
-        email: email.trim(),
-        password,
-      });
-      router.push("/login?registered=true");
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      setError(
-        e?.response?.data?.message ||
-        "Something went wrong. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
+  e.preventDefault();
+  setLoading(true);
+  setError("");
+
+  if (!strength.isStrong) {
+    setError("Password must be at least 8 characters and include a letter, a number, and a symbol.");
+    setLoading(false);
+    return;
   }
+
+  try {
+    await register({
+      name: `${firstName.trim()} ${lastName.trim()}`,
+      email: email.trim(),
+      password,
+    });
+    router.push("/login?registered=true");
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { message?: string } } };
+    setError(
+      e?.response?.data?.message ||
+      "Something went wrong. Please try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+}
 
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center px-6">
@@ -97,7 +111,7 @@ export default function RegisterPage() {
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Amaka"
+                  placeholder="John"
                   required
                   className="w-full h-11 pl-9 pr-3 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
                 />
@@ -113,7 +127,7 @@ export default function RegisterPage() {
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Okonkwo"
+                  placeholder="Doe"
                   required
                   className="w-full h-11 pl-9 pr-3 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
                 />
@@ -123,7 +137,7 @@ export default function RegisterPage() {
 
           {/* Email */}
           <div className="mb-5">
-            <label htmlFor="reg-email" className="block text-[13px] font-semibold text-ink mb-1.5">Email or Phone number</label>
+            <label htmlFor="reg-email" className="block text-[13px] font-semibold text-ink mb-1.5">Email </label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
               <input
@@ -132,9 +146,9 @@ export default function RegisterPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="amaka@gmail.com"
+                placeholder="johndoe@gmail.com"
                 required
-                className="w-full h-11 pl-9 pr-3 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
+                className="w-full h-11 pl-9 pr-3 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-grey-300 placeholder:font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
               />
             </div>
           </div>
@@ -152,8 +166,8 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
-                minLength={6}
-                className="w-full h-11 pl-9 pr-10 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
+                minLength={8}
+                className="w-full h-11 pl-9 pr-10 border border-grey-200 rounded-lg text-[14px] text-ink placeholder:text-grey-300 placeholder:font-normal focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
               />
               <button
                 type="button"

@@ -3,7 +3,8 @@
 // User-related API calls.
 // - updateProfile() — used at the end of onboarding to save goal, level, dailyTime.
 // - getProfile()    — fetches the logged-in user's full profile (name, email,
-//                      preferences, createdAt). Used on the Profile page.
+//                      role, preferences, createdAt). Used on the Profile page
+//                      and to verify admin access.
 
 import api from "@/lib/axios";
 // The shared Axios instance already injects the Bearer token,
@@ -11,14 +12,12 @@ import api from "@/lib/axios";
 
 // ─── TYPE DEFINITIONS ────────────────────────────────────────────────────────
 
-// The three fields collected across onboarding Steps 1–3
 interface UpdateProfilePayload {
-  goal: string;         // e.g. "Become a Frontend Developer", "Learn Python"
+  goal: string;
   currentLevel: "beginner" | "intermediate" | "advanced";
-  dailyTime: number;    // Minutes per day the user wants to study. e.g. 30, 60, 120
+  dailyTime: number;
 }
 
-// What the server sends back after a successful profile update
 interface UpdateProfileResponse {
   success: boolean;
   user: {
@@ -41,6 +40,7 @@ interface GetProfileResponse {
       _id: string;
       name: string;
       email: string;
+      role: string; // "admin" | "user" — confirmed present on this endpoint
       createdAt: string;
       preferences: {
         goal: string;
@@ -51,19 +51,8 @@ interface GetProfileResponse {
   };
 }
 
-// ─── UPDATE PROFILE ────────────────────────────────────────────────────────
-// Sends a PUT request to /api/user/profile.
-// The Authorization header is added automatically by lib/axios.ts.
-//
-// Called from: app/onboarding/time/page.tsx (the last onboarding step)
-// After this succeeds → call generateRoadmap() → redirect to /dashboard
-//
-// Usage:
-//   const response = await updateProfile({
-//     goal: "Become a Frontend Dev",
-//     currentLevel: "beginner",
-//     dailyTime: 60,
-//   });
+// ─── UPDATE PROFILE ──────────────────────────────────────────────────────────
+
 export async function updateProfile(payload: UpdateProfilePayload) {
   const response = await api.put<UpdateProfileResponse>(
     "/api/user/profile",
@@ -72,14 +61,16 @@ export async function updateProfile(payload: UpdateProfilePayload) {
   return response;
 }
 
-// ─── GET PROFILE ────────────────────────────────────────────────────────────
-// Fetches the currently logged-in user's full profile — name, email,
-// createdAt, and preferences (goal, currentLevel, dailyTime).
-// Used on: app/(app)/profile/page.tsx
+// ─── GET PROFILE ─────────────────────────────────────────────────────────────
+// Fetches the currently logged-in user's full profile — name, email, role,
+// createdAt, and preferences. This is the single source of truth used both
+// by the Profile page and by the admin layout guard, so access decisions
+// are always verified against the API rather than a cached value.
 //
 // Usage:
 //   const response = await getProfile();
 //   const user = response.data.data.user;
+
 export async function getProfile() {
   const response = await api.get<GetProfileResponse>("/api/user/profile");
   return response;

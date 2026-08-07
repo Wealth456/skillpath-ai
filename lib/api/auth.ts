@@ -6,63 +6,43 @@
 // never import axios directly.
 
 import api from "@/lib/axios";
-// "@/lib/axios" → "@/" is a TypeScript path alias for your project root.
-// This is the same as "../../lib/axios" but cleaner.
+import axios from "axios";
 
 // ─── TYPE DEFINITIONS ────────────────────────────────────────────────────────
-// TypeScript interfaces describe the SHAPE of data.
-// If you pass the wrong fields, TypeScript will warn you immediately.
 
-// What we send to the register endpoint
 interface RegisterPayload {
   name: string;
   email: string;
   password: string;
 }
 
-// What we send to the login endpoint
 interface LoginPayload {
   email: string;
   password: string;
 }
 
-// What the login endpoint sends back
-// (register doesn't return a token — user must login after)
 interface AuthResponse {
-  token: string;       // JWT token — save this to localStorage
-  user?: {             // "?" means this field is optional
+  token: string;
+  user?: {
     _id: string;
     name: string;
     email: string;
+    role?: string; // "admin" | "user" — added so the app can branch on it
     onboardingComplete?: boolean;
   };
 }
 
-// ─── REGISTER ────────────────────────────────────────────────────────────────
-// Sends a POST request to /api/auth/register with name, email, password.
-// Returns the full Axios response object.
-// The caller (your register page) will check response.data for success/failure.
-//
-// Usage in a component:
-//   const response = await register({ name, email, password });
-//   console.log(response.data); // { success: true, ... }
+// ─── REGISTER ──────────────────────────────────────────────────────────────
+
 export async function register(payload: RegisterPayload) {
-  // api.post<T>(url, data) sends a POST request.
-  // The generic <AuthResponse> tells TypeScript what shape response.data has.
   const response = await api.post<AuthResponse>("/api/auth/register", payload);
   return response;
 }
 
-// ─── LOGIN ───────────────────────────────────────────────────────────────────
-// Sends a POST request to /api/auth/login with email and password.
-// On success: saves the token to localStorage, then returns the response.
-//
-// Usage in a component:
-//   const response = await login({ email, password });
-//   // token is already saved — you can redirect immediately
+// ─── LOGIN ─────────────────────────────────────────────────────────────────
+
 export async function login(payload: LoginPayload) {
   const response = await api.post<AuthResponse>("/api/auth/login", payload);
-
   const data  = response.data as unknown as Record<string, unknown>;
   const inner = data?.data as Record<string, unknown> | undefined;
 
@@ -72,19 +52,75 @@ export async function login(payload: LoginPayload) {
   // before the fresh one is fetched/generated.
   localStorage.removeItem("skillpath_roadmap");
 
+  sessionStorage.removeItem("skillpath_search_query");
+
   const token = inner?.token as string | undefined;
-  if (token) { localStorage.setItem("skillpath_token", token); }
+  if (token) {
+    localStorage.setItem("skillpath_token", token);
+  }
 
   const user = inner?.user as Record<string, unknown> | undefined;
 
-  const name = user?.name as string | undefined;
-  if (name) { localStorage.setItem("skillpath_name", name); }
+  const email = user?.email as string | undefined;
+  if (email) {
+    localStorage.setItem("skillpath_email", email);
+  }
 
   const userId = user?._id as string | undefined;
-  if (userId) { localStorage.setItem("skillpath_user_id", userId); }
+  if (userId) {
+    localStorage.setItem("skillpath_user_id", userId);
+  }
+
+  const name = user?.name as string | undefined;
+  if (name) {
+    localStorage.setItem("skillpath_name", name);
+  }
+
+  const role = user?.role as string | undefined;
+  if (role) {
+    localStorage.setItem("skillpath_role", role);
+  } else {
+    // Defensive: if a previous admin session left a stale role behind
+    // and this login response has none, don't let it leak forward.
+    localStorage.removeItem("skillpath_role");
+  }
 
   const preferences = user?.preferences as Record<string, unknown> | undefined;
-  if (preferences) { localStorage.setItem("skillpath_preferences", JSON.stringify(preferences)); }
+  if (preferences) {
+    localStorage.setItem("skillpath_preferences", JSON.stringify(preferences));
+  }
 
   return response;
+}
+
+// ─── LOGOUT ────────────────────────────────────────────────────────────────
+// Centralised so both the learner app and the admin panel clear the exact
+// same set of keys — avoids leftover state from a previous session leaking
+// into a fresh login.
+
+export function logout() {
+  localStorage.removeItem("skillpath_token");
+  localStorage.removeItem("skillpath_role");
+  localStorage.removeItem("skillpath_email");
+  localStorage.removeItem("skillpath_user_id");
+  localStorage.removeItem("skillpath_name");
+  localStorage.removeItem("skillpath_preferences");
+  localStorage.removeItem("skillpath_roadmap");
+  window.location.href = "/login";
+}
+
+// Used only for logout password re-verification. Bypasses the shared
+// `api` instance's interceptor, which treats any 401 as "session expired"
+// and force-redirects — wrong behavior here, since a wrong password on
+// logout confirmation is expected user error, not an expired session.
+export async function verifyPassword(email: string, password: string): Promise<boolean> {
+  try {
+    await axios.post("https://skillpath-backend.symplax.app/api/auth/login", {
+      email,
+      password,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

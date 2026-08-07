@@ -10,12 +10,14 @@ import {
   Sparkles,
   Trophy,
   CheckCircle2,
+  Check,
   Clock,
 } from "lucide-react";
-import { getCourses, getProgressSummary, getEnrollments } from "@/lib/api/learning";
+import { getCourses, getProgressSummary, getEnrollments, enrollInCourse } from "@/lib/api/learning";
 import type { Enrollment } from "@/lib/api/learning";
 import { getRoadmap } from "@/lib/api/roadmap";
 import { useRouter } from "next/navigation";
+import PageNav from "@/components/PageNav";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 interface Lesson {
@@ -59,6 +61,131 @@ interface Roadmap {
   stages: RoadmapStage[];
 }
 
+// ── KEYWORD MATCHING ─────────────────────────────────────────────────────────
+const STOPWORDS = new Set([
+  "the", "a", "an", "of", "to", "and", "for", "in", "on", "with",
+  "your", "you", "beginner", "intermediate", "advanced", "introduction",
+  "fundamentals", "basics", "guide", "learn", "learning", "mastery",
+  "from", "job", "ready",
+]);
+
+function extractKeywords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s/]/g, " ")
+      .split(/\s+/)
+      .flatMap((word) => word.split("/"))
+      .filter((word) => word.length > 2 && !STOPWORDS.has(word))
+  );
+}
+
+function matchCourseForStage(stage: RoadmapStage, courses: Course[]): Course | null {
+  const stageKeywords = new Set([
+    ...extractKeywords(stage.title),
+    ...stage.topics.flatMap((t) => Array.from(extractKeywords(t.name))),
+  ]);
+
+  let bestMatch: Course | null = null;
+  let bestScore = 0;
+
+  for (const course of courses) {
+    const courseKeywords = new Set([
+      ...extractKeywords(course.category ?? ""),
+      ...extractKeywords(course.title ?? ""),
+      ...(course.modules ?? []).flatMap((m) => Array.from(extractKeywords(m.title ?? ""))),
+    ]);
+
+    let sharedCount = 0;
+    for (const word of stageKeywords) {
+      if (courseKeywords.has(word)) sharedCount++;
+    }
+
+    if (sharedCount >= 2 && sharedCount > bestScore) {
+      bestScore = sharedCount;
+      bestMatch = course;
+    }
+  }
+
+  return bestMatch;
+}
+
+// ── DATE HELPERS ──────────────────────────────────────────────────────────────
+// Both derived from real `lastAccessedAt` timestamps returned per
+// enrollment by the backend — not invented data. Limitation: this
+// reflects "a course was opened that day", not per-lesson granularity,
+// since the backend doesn't expose per-lesson completion timestamps.
+
+function toDateKey(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+function computeActiveDayKeys(enrollments: Enrollment[]): Set<string> {
+  const keys = new Set<string>();
+  enrollments.forEach((e) => {
+    if (e.progress?.lastAccessedAt) {
+      keys.add(toDateKey(e.progress.lastAccessedAt));
+    }
+  });
+  return keys;
+}
+
+function computeStreak(activeDayKeys: Set<string>): number {
+  if (activeDayKeys.size === 0) return 0;
+
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = yesterday.toISOString().slice(0, 10);
+
+  // Streak only counts as "current" if today or yesterday had activity —
+  // otherwise it's a broken streak, so it resets to 0.
+  if (!activeDayKeys.has(todayKey) && !activeDayKeys.has(yesterdayKey)) {
+    return 0;
+  }
+
+  let streak = 0;
+  const cursor = activeDayKeys.has(todayKey) ? new Date(today) : new Date(yesterday);
+
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if (activeDayKeys.has(key)) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+function getLast7DaysActivity(activeDayKeys: Set<string>): { day: string; active: boolean }[] {
+  const labels = ["M", "T", "W", "T", "F", "S", "S"];
+  const result: { day: string; active: boolean }[] = [];
+  const today = new Date();
+
+  // Find this week's Monday. getDay() returns 0=Sun..6=Sat, so we
+  // calculate how many days back Monday is (Sunday wraps to 6 days back).
+  const dayOfWeek = today.getDay(); // 0 = Sunday
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - daysSinceMonday);
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    // Don't mark future days within this week as active — only today
+    // and past days are checked against real access data.
+    const isFuture = d > today;
+    result.push({ day: labels[i], active: !isFuture && activeDayKeys.has(key) });
+  }
+
+  return result;
+}
+
 // ── STAT CARD ─────────────────────────────────────────────────────────────────
 function StatCard({
   icon,
@@ -85,18 +212,9 @@ function StatCard({
   );
 }
 
-// ── WEEKLY CHART ──────────────────────────────────────────────────────────────
-function WeeklyChart() {
-  const days = [
-    { day: "M", lessons: 3 },
-    { day: "T", lessons: 5 },
-    { day: "W", lessons: 4 },
-    { day: "T", lessons: 7 },
-    { day: "F", lessons: 2 },
-    { day: "S", lessons: 1 },
-    { day: "S", lessons: 0 },
-  ];
-  const max = Math.max(...days.map((d) => d.lessons));
+// ── WEEKLY ACTIVITY CHART — real, based on lastAccessedAt ─────────────────────
+function WeeklyChart({ activeDayKeys }: { activeDayKeys: Set<string> }) {
+  const days = getLast7DaysActivity(activeDayKeys);
 
   return (
     <div className="flex items-end justify-between gap-2 h-20 mt-2">
@@ -104,13 +222,150 @@ function WeeklyChart() {
         <div key={i} className="flex flex-col items-center gap-1 flex-1">
           <div
             className={`w-full rounded-t-md transition-all ${
-              d.lessons === max ? "bg-primary" : "bg-grey-200"
+              d.active ? "bg-primary" : "bg-grey-200"
             }`}
-            style={{ height: max > 0 ? `${(d.lessons / max) * 56}px` : "4px" }}
+            style={{ height: d.active ? "56px" : "4px" }}
           />
           <span className="text-[10px] text-ink-faint">{d.day}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── ROADMAP-RECOMMENDED CARD (left side of Continue Learning) ────────────────
+function RoadmapCourseCard({
+  course,
+  percent,
+  isEnrolled,
+}: {
+  course: Course | null;
+  percent: number;
+  isEnrolled: boolean;
+}) {
+  const router = useRouter();
+  const [enrolling, setEnrolling] = useState(false);
+
+  async function handleStart() {
+    if (!course) return;
+
+    if (isEnrolled) {
+      router.push(`/courses/${course._id}`);
+      return;
+    }
+
+    try {
+      setEnrolling(true);
+      await enrollInCourse(course._id);
+    } catch {
+      // Already enrolled server-side, or a transient error — still navigate.
+    } finally {
+      setEnrolling(false);
+      router.push(`/courses/${course._id}`);
+    }
+  }
+
+  return (
+    <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow">
+      <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
+        From Your Roadmap
+      </div>
+
+      {course ? (
+        <>
+          <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
+          <p className="text-[12px] text-ink-muted mb-3">
+            By {course.instructor} · {course.totalLessons} lessons
+          </p>
+          <div className="mb-1">
+            <div className="flex justify-between mb-1">
+              <span className="text-[12px] text-ink-muted">Progress</span>
+              <span className="text-[12px] font-semibold text-primary">{percent}%</span>
+            </div>
+            <div className="h-1.5 bg-grey-200 rounded-full overflow-hidden">
+              <div
+                className="h-1.5 bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-ink-faint mb-4">
+            Your current roadmap stage
+          </p>
+          <button
+            onClick={handleStart}
+            disabled={enrolling}
+            className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all disabled:opacity-60"
+          >
+            {enrolling ? "Starting..." : percent > 0 ? "Continue Course →" : "Start Course →"}
+          </button>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <Map size={28} className="text-ink-faint mb-2" />
+          <p className="text-[13px] text-ink-muted mb-3">
+            No matching course found for your roadmap yet
+          </p>
+          <Link href="/roadmap" className="text-primary text-[13px] font-semibold underline">
+            View roadmap →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── ENROLLED CARD (right side of Continue Learning) ──────────────────────────
+function EnrolledCourseCard({
+  course,
+  percent,
+}: {
+  course: Course | null;
+  percent: number;
+}) {
+  return (
+    <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow">
+      <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
+        Your Enrolled Courses
+      </div>
+
+      {course ? (
+        <>
+          <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
+          <p className="text-[12px] text-ink-muted mb-3">
+            By {course.instructor} · {course.totalLessons} lessons
+          </p>
+          <div className="mb-1">
+            <div className="flex justify-between mb-1">
+              <span className="text-[12px] text-ink-muted">Progress</span>
+              <span className="text-[12px] font-semibold text-primary">{percent}%</span>
+            </div>
+            <div className="h-1.5 bg-grey-200 rounded-full overflow-hidden">
+              <div
+                className="h-1.5 bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-ink-faint mb-4">
+            {percent === 100 ? "Completed" : percent > 0 ? "In progress" : "Not started"}
+          </p>
+          <Link
+            href={`/courses/${course._id}`}
+            className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
+          >
+            {percent > 0 ? "Continue Course →" : "Start Course →"}
+          </Link>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <BookOpen size={28} className="text-ink-faint mb-2" />
+          <p className="text-[13px] text-ink-muted mb-3">No other enrolled courses yet</p>
+          <Link href="/courses" className="text-primary text-[13px] font-semibold underline">
+            Browse courses →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -123,34 +378,17 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState("there");
   const [loading, setLoading]   = useState(true);
 
-  // Real per-course progress — now sourced from GET /api/learning/progress/summary
-  // instead of localStorage completed lesson IDs. Keyed by courseId → percentage (0-100).
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
-
-  // Total lessons completed across ALL courses — now the `totalLessonsCompleted`
-  // field from the progress summary, instead of a value computed client-side
-  // from localStorage.
   const [totalLessonsDone, setTotalLessonsDone] = useState(0);
 
-  // Full course objects the user is actually enrolled in (from
-  // GET /api/learning/enrollments), sorted by progress descending.
-  // Drives the "Continue Learning" section — previously this section
-  // just showed courses.slice(0, 2), i.e. whatever 2 courses happened
-  // to be first in the full catalogue, enrolled or not.
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
-
-  // Just the IDs of enrolled courses, used to filter them OUT of
-  // "Recommended for You" so it doesn't recommend courses the user
-  // is already taking.
   const [enrolledIds, setEnrolledIds] = useState<string[]>([]);
+  const [activeDayKeys, setActiveDayKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // ── READ USER NAME ──────────────────────────────────────────────────────
     const name = localStorage.getItem("skillpath_name") || "";
     setUserName(name.split(" ")[0] || "there");
 
-    // ── READ THIS USER'S ROADMAP ────────────────────────────────────────────
-    // Fast path: already cached locally.
     const savedRoadmap = localStorage.getItem("skillpath_roadmap");
     if (savedRoadmap) {
       try {
@@ -159,8 +397,6 @@ export default function DashboardPage() {
         localStorage.removeItem("skillpath_roadmap");
       }
     } else {
-      // Fallback: nothing cached (e.g. right after login, since login()
-      // clears this key) — ask the backend if this user already has one.
       const userId = localStorage.getItem("skillpath_user_id");
       if (userId) {
         getRoadmap(userId)
@@ -172,13 +408,11 @@ export default function DashboardPage() {
             }
           })
           .catch(() => {
-            // 404 (genuinely no roadmap) or network error — dashboard
-            // already handles a null `roadmap` gracefully.
+            // 404 or network error
           });
       }
     }
 
-    // ── FETCH COURSES + PROGRESS SUMMARY FROM API ───────────────────────────
     async function fetchDashboardData() {
       try {
         const res = await getCourses();
@@ -188,9 +422,6 @@ export default function DashboardPage() {
         console.error("Failed to fetch courses:", err);
       }
 
-    // totalLessonsCompleted still comes from the summary endpoint —
-      // that field IS reliable, we just can't use its per-course
-      // breakdown since it has no courseId to match against.
       try {
         const summaryRes = await getProgressSummary();
         const summary = summaryRes.data.data.summary;
@@ -200,9 +431,6 @@ export default function DashboardPage() {
         setTotalLessonsDone(0);
       }
 
-      // Enrollments are the single source of truth for per-course progress —
-      // same data source the course detail page and Profile page use, so
-      // they can never disagree with the dashboard.
       try {
         const enrollRes = await getEnrollments();
         const enrollments: Enrollment[] = enrollRes.data.data.enrollments ?? [];
@@ -219,11 +447,16 @@ export default function DashboardPage() {
 
         setEnrolledCourses(sortedByProgress.map((enrollment) => enrollment.course));
         setEnrolledIds(enrollments.map((enrollment) => enrollment.course._id));
+
+        // Real streak/weekly-activity source — derived from actual
+        // lastAccessedAt timestamps per enrollment.
+        setActiveDayKeys(computeActiveDayKeys(enrollments));
       } catch (err: unknown) {
         console.error("Failed to fetch enrollments:", err);
         setProgressMap({});
         setEnrolledCourses([]);
         setEnrolledIds([]);
+        setActiveDayKeys(new Set());
       } finally {
         setLoading(false);
       }
@@ -239,14 +472,25 @@ export default function DashboardPage() {
     return "Good evening";
   }
 
-  // Returns the number of modules in a course that are "not started"
-  // for display text like "2 modules · Not started" / "In progress"
-  function getCourseStatusLabel(course: Course, percent: number): string {
-    const moduleCount = course.modules?.length || 0;
-    if (percent === 0) return `${moduleCount} modules · Not started`;
-    if (percent === 100) return `${moduleCount} modules · Completed`;
-    return `${moduleCount} modules · In progress`;
+  let roadmapCourse: Course | null = null;
+  if (roadmap) {
+    for (const stage of roadmap.stages) {
+      const matched = matchCourseForStage(stage, courses);
+      if (!matched) continue;
+      const percent = progressMap[matched._id] ?? 0;
+      if (percent < 100) {
+        roadmapCourse = matched;
+        break;
+      }
+    }
   }
+  const roadmapCoursePercent = roadmapCourse ? progressMap[roadmapCourse._id] ?? 0 : 0;
+  const roadmapCourseIsEnrolled = roadmapCourse ? enrolledIds.includes(roadmapCourse._id) : false;
+
+  const topEnrolledCourse = enrolledCourses.find((c) => c._id !== roadmapCourse?._id) ?? null;
+  const topEnrolledPercent = topEnrolledCourse ? progressMap[topEnrolledCourse._id] ?? 0 : 0;
+
+  const streak = computeStreak(activeDayKeys);
 
   if (loading) {
     return (
@@ -261,6 +505,7 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <PageNav />
       {/* ── PAGE HEADER ── */}
       <div className="mb-6">
         <h1 className="text-[28px] font-black text-ink tracking-tight">
@@ -290,8 +535,8 @@ export default function DashboardPage() {
         <StatCard
           icon={<Flame size={15} className="text-primary" />}
           label="Day Streak"
-          value="0 🔥"
-          sub="Start your streak today"
+          value={`${streak} 🔥`}
+          sub={streak > 0 ? "Keep the momentum going!" : "Learn today to start your streak"}
         />
         <StatCard
           icon={<Map size={15} className="text-primary" />}
@@ -307,57 +552,14 @@ export default function DashboardPage() {
         {/* ── LEFT COLUMN ── */}
         <div className="flex-1 flex flex-col gap-5 min-w-0">
 
-          {/* Continue Learning */}
+          {/* Continue Learning — two equal cards */}
           <div className="flex gap-4">
-            {enrolledCourses.length > 0 ? (
-              enrolledCourses.slice(0, 2).map((course) => {
-                // Read this course's real progress percentage
-                const percent = progressMap[course._id] ?? 0;
-                return (
-                  <div
-                    key={course._id}
-                    className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default hover:shadow-card-hover transition-shadow"
-                  >
-                    <div className="inline-block bg-primary-light text-primary text-[11px] font-bold px-2 py-0.5 rounded-full mb-3">
-                      {course.category}
-                    </div>
-                    <h3 className="text-[15px] font-bold text-ink mb-1">{course.title}</h3>
-                    <p className="text-[12px] text-ink-muted mb-3">
-                      By {course.instructor} · {course.totalLessons} lessons
-                    </p>
-                    <div className="mb-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[12px] text-ink-muted">Progress</span>
-                        <span className="text-[12px] font-semibold text-primary">{percent}%</span>
-                      </div>
-                      <div className="h-1.5 bg-grey-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-1.5 bg-primary rounded-full transition-all duration-500"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-ink-faint mb-4">
-                      {getCourseStatusLabel(course, percent)}
-                    </p>
-                    <Link
-                      href={`/courses/${course._id}`}
-                      className="block w-full text-center bg-primary hover:bg-primary-dark text-white text-[13px] font-bold py-2.5 rounded-full transition-all"
-                    >
-                      {percent > 0 ? "Continue Course →" : "Start Course →"}
-                    </Link>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-6 text-center">
-                <BookOpen size={32} className="text-ink-faint mx-auto mb-3" />
-                <p className="text-[14px] text-ink-muted mb-3">No courses yet</p>
-                <Link href="/courses" className="text-primary text-[13px] font-semibold underline">
-                  Browse courses →
-                </Link>
-              </div>
-            )}
+            <RoadmapCourseCard
+              course={roadmapCourse}
+              percent={roadmapCoursePercent}
+              isEnrolled={roadmapCourseIsEnrolled}
+            />
+            <EnrolledCourseCard course={topEnrolledCourse} percent={topEnrolledPercent} />
           </div>
 
           {/* AI Tip Banner */}
@@ -439,58 +641,93 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Bottom row: Achievements + Recommended */}
-          <div className="flex gap-4">
+         {/* Recent Achievements — computed from real progress data:
+              totalLessonsDone and per-course completion percentages.
+              Not a stored/persisted achievement system on the backend —
+              these are derived client-side each load from real numbers. */}
+          <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
+            <h3 className="text-[15px] font-bold text-ink mb-4">Recent Achievements</h3>
+            {(() => {
+              const achievements: { emoji: string; label: string }[] = [];
 
-            {/* Recent Achievements */}
-            <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
-              <h3 className="text-[15px] font-bold text-ink mb-4">Recent Achievements</h3>
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <Trophy size={28} className="text-ink-faint mb-2" />
-                <p className="text-[13px] text-ink-muted">
-                  Complete your first lesson to earn achievements
-                </p>
-              </div>
-            </div>
+              if (totalLessonsDone >= 1) {
+                achievements.push({ emoji: "🎯", label: "First Lesson Complete" });
+              }
+              if (totalLessonsDone >= 5) {
+                achievements.push({ emoji: "📚", label: "5 Lessons Completed" });
+              }
+              enrolledCourses.forEach((course) => {
+                const percent = progressMap[course._id] ?? 0;
+                if (percent === 100) {
+                  achievements.push({ emoji: "🏆", label: `${course.title} Completed` });
+                } else if (percent >= 50) {
+                  achievements.push({ emoji: "🔥", label: `${course.title} — Halfway There` });
+                }
+              });
 
-            {/* Recommended Courses */}
-            <div className="flex-1 min-w-0 bg-white rounded-2xl border border-border p-5 shadow-card-default">
-              <h3 className="text-[15px] font-bold text-ink mb-4">Recommended for You</h3>
-              <div className="flex flex-col gap-3">
-                {courses.filter((course) => !enrolledIds.includes(course._id)).map((course) => (
-                  <div key={course._id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <BookOpen size={13} className="text-primary flex-shrink-0" />
-                      <span className="text-[13px] text-ink truncate">{course.title}</span>
-                    </div>
-                    <Link
-                      href={`/courses/${course._id}`}
-                      className="text-[12px] font-semibold text-primary hover:underline flex-shrink-0 ml-2"
-                    >
-                      Start →
-                    </Link>
+              if (achievements.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <Trophy size={28} className="text-ink-faint mb-2" />
+                    <p className="text-[13px] text-ink-muted">
+                      Complete your first lesson to earn achievements
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
+                );
+              }
+
+              return (
+                <div className="flex flex-col gap-2.5">
+                  {achievements.slice(0, 4).map((a, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <span className="text-[18px]">{a.emoji}</span>
+                      <span className="text-[13px] font-semibold text-ink">{a.label}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
         {/* ── RIGHT COLUMN ── */}
         <div className="w-[240px] flex-shrink-0 flex flex-col gap-5">
 
-          {/* Today's Goals */}
+          {/* Today's Goals — now real: links to the matched course for
+              the active stage, shows a check if that course is fully
+              complete. Per-topic tracking isn't possible since topics
+              aren't individually linked to lessons in the backend. */}
           <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
             <h3 className="text-[15px] font-bold text-ink mb-4">Today&apos;s Goals</h3>
-            {roadmap ? (
+            {roadmap && roadmapCourse ? (
               <div className="flex flex-col gap-2.5">
                 {roadmap.stages[0]?.topics.slice(0, 3).map((topic) => (
                   <div key={topic._id} className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full border-2 border-grey-200 flex-shrink-0" />
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                        roadmapCoursePercent === 100
+                          ? "bg-primary border-primary"
+                          : "border-grey-200"
+                      }`}
+                    >
+                      {roadmapCoursePercent === 100 && (
+                        <Check size={11} className="text-white" />
+                      )}
+                    </div>
                     <span className="text-[13px] text-ink">{topic.name}</span>
                   </div>
                 ))}
+                <Link
+                  href={`/courses/${roadmapCourse._id}`}
+                  className="text-[12px] font-semibold text-primary hover:underline mt-1"
+                >
+                  {roadmapCoursePercent === 100 ? "Stage complete →" : "Continue this stage →"}
+                </Link>
               </div>
+            ) : roadmap ? (
+              <p className="text-[13px] text-ink-muted text-center py-4">
+                No matching course found for this stage yet
+              </p>
             ) : (
               <p className="text-[13px] text-ink-muted text-center py-4">
                 Generate your roadmap to see daily goals
@@ -498,11 +735,11 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Weekly Activity */}
+          {/* Weekly Activity — real, from lastAccessedAt timestamps */}
           <div className="bg-white rounded-2xl border border-border p-5 shadow-card-default">
             <h3 className="text-[15px] font-bold text-ink mb-1">Weekly Activity</h3>
-            <p className="text-[12px] text-ink-muted">Lessons completed per day</p>
-            <WeeklyChart />
+            <p className="text-[12px] text-ink-muted">Days you accessed a course</p>
+            <WeeklyChart activeDayKeys={activeDayKeys} />
           </div>
 
           {/* Roadmap Summary */}
